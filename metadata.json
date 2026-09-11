@@ -1,0 +1,8 @@
+{
+  "name": "Masjid Al Hijrah PTPP",
+  "description": "Aplikasi mobile PWA absensi jamaah dan perolehan poin kajian Masjid Al Hijrah PTPP via QR Code",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

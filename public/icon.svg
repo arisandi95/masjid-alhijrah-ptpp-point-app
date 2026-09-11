@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F6B4C" />
+      <stop offset="100%" stop-color="#094A34" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3E08F" />
+      <stop offset="50%" stop-color="#D4AF37" />
+      <stop offset="100%" stop-color="#AA8214" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded rectangle -->
+  <rect width="512" height="512" rx="112" fill="url(#primaryGrad)" />
+
+  <!-- Subtle Islamic geometric border accent -->
+  <rect x="24" y="24" width="464" height="464" rx="92" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.35" stroke-dasharray="12 8" />
+
+  <!-- Center Dome & Minaret Graphic -->
+  <g transform="translate(256, 246)">
+    <!-- Crescent Moon atop dome -->
+    <path d="M 12 -120 A 28 28 0 1 0 -12 -74 A 22 22 0 1 1 12 -120 Z" fill="url(#goldGrad)" />
+
+    <!-- Central Dome Arch -->
+    <path d="M 0 -80 C 45 -80 75 -40 85 0 L 85 90 L -85 90 L -85 0 C -75 -40 -45 -80 0 -80 Z" fill="#FFFFFF" fill-opacity="0.95" />
+
+    <!-- Dome Doorway Arch -->
+    <path d="M 0 -20 C 22 -20 38 0 38 35 L 38 90 L -38 90 L -38 35 C -38 0 -22 -20 0 -20 Z" fill="url(#primaryGrad)" />
+
+    <!-- Left Minaret Pillar -->
+    <path d="M -135 90 L -105 90 L -105 -20 L -120 -40 L -135 -20 Z" fill="url(#goldGrad)" />
+    <!-- Right Minaret Pillar -->
+    <path d="M 105 90 L 135 90 L 135 -20 L 120 -40 L 105 -20 Z" fill="url(#goldGrad)" />
+
+    <!-- Star decoration inside arch -->
+    <circle cx="0" cy="18" r="7" fill="url(#goldGrad)" />
+
+    <!-- QR code corner motifs -->
+    <rect x="-140" y="115" width="280" height="6" rx="3" fill="url(#goldGrad)" />
+  </g>
+
+  <!-- Text: AL HIJRAH -->
+  <text x="256" y="420" font-family="'Poppins', sans-serif" font-size="34" font-weight="700" fill="#FFFFFF" text-anchor="middle" letter-spacing="4">AL HIJRAH</text>
+  <text x="256" y="452" font-family="'Inter', sans-serif" font-size="18" font-weight="500" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="6">PTPP</text>
+</svg>
