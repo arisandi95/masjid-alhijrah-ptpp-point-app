@@ -7,7 +7,7 @@ interface PointBadgeProps {
   showRank?: boolean;
 }
 
-export const PointBadge: React.FC<PointBadgeProps> = ({ points, size = 'md', showRank = true }) => {
+export const PointBadge: React.FC<PointBadgeProps> = ({ points, size = 'md', showRank = false }) => {
   // Rank based on points
   let rank = 'Jamaah Pemula';
   let rankColor = 'text-[#0F6B4C] bg-[#E8F3EE]';

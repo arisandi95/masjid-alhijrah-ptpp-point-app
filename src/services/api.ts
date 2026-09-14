@@ -354,13 +354,20 @@ export const api = {
         }
 
         const resAny = gasResult as any;
+        const poinDidapat = gasResult.data?.poin_didapat ?? resAny.poin_didapat ?? 0;
+        const isRedeem = gasResult.data?.event?.event_type === 'redeem' || resAny.event?.event_type === 'redeem';
+        const isQuotaFull = !isRedeem && (resAny.kuota_penuh === true || (poinDidapat === 0 && gasResult.success));
+
         return {
           success: true,
-          message: gasResult.message || 'Absensi/penukaran berhasil diproses!',
-          poin_didapat: gasResult.data?.poin_didapat ?? resAny.poin_didapat ?? 0,
+          message: gasResult.message || (isQuotaFull
+            ? 'Evaluasi tersimpan, namun kuota perolehan poin acara ini sudah penuh.'
+            : 'Absensi/penukaran berhasil diproses!'),
+          poin_didapat: poinDidapat,
           total_poin_terbaru: gasResult.data?.total_poin_terbaru ?? resAny.total_poin_terbaru,
           event: gasResult.data?.event ?? resAny.event,
           event_type: gasResult.data?.event?.event_type ?? resAny.event?.event_type,
+          kuota_penuh: isQuotaFull,
         };
       } catch (e: any) {
         if (e.message !== 'NO_GAS_URL') {
@@ -423,10 +430,7 @@ export const api = {
       };
     }
 
-    const deltaPoin = isRedeem ? -event.poin_value : event.poin_value;
-    const updatedTotal = Math.max(0, currentPoin + deltaPoin);
-
-    // Save review if provided
+    // Save review first (formulir evaluasi acara selalu dicatat)
     if (review) {
       const newReview: EventReview = {
         review_id: 'rev_' + Date.now(),
@@ -447,6 +451,28 @@ export const api = {
       saveLocalReviews(reviews);
     }
 
+    // CEK KUOTA KAJIAN:
+    // Dilakukan setelah pengisian form evaluasi acara
+    let isQuotaFull = false;
+    let sisaKuota: number | undefined = undefined;
+
+    if (!isRedeem && event.kuota && event.kuota > 0) {
+      // Hitung berapa jamaah yang sudah mendapatkan poin pada kajian ini
+      const claimedCount = logs.filter(
+        (l) => l.event_id === event.event_id && (l.poin_didapat || 0) > 0
+      ).length;
+
+      if (claimedCount >= event.kuota) {
+        isQuotaFull = true;
+      } else {
+        sisaKuota = event.kuota - (claimedCount + 1);
+      }
+    }
+
+    // Jika kuota sudah penuh, user tidak dapat poin (deltaPoin = 0)
+    const deltaPoin = isRedeem ? -event.poin_value : isQuotaFull ? 0 : event.poin_value;
+    const updatedTotal = Math.max(0, currentPoin + deltaPoin);
+
     // Record scan log
     const newLog: ScanLog = {
       log_id: 'log_' + Date.now(),
@@ -461,24 +487,32 @@ export const api = {
     logs.unshift(newLog);
     saveLocalLogs(logs);
 
-    // Update user total_poin
-    const updatedUsers = users.map((u) => {
-      if (u.user_id === userId) {
-        return { ...u, total_poin: updatedTotal };
-      }
-      return u;
-    });
-    saveLocalUsers(updatedUsers);
+    // Update user total_poin jika ada perubahan poin
+    if (deltaPoin !== 0) {
+      const updatedUsers = users.map((u) => {
+        if (u.user_id === userId) {
+          return { ...u, total_poin: updatedTotal };
+        }
+        return u;
+      });
+      saveLocalUsers(updatedUsers);
+    }
+
+    const message = isRedeem
+      ? `Penukaran berhasil! ${event.poin_value} poin telah ditukarkan untuk "${event.nama_event}". Sisa poin Anda: ${updatedTotal} poin.`
+      : isQuotaFull
+      ? `Evaluasi acara berhasil tersimpan! Namun, mohon maaf kuota perolehan poin untuk kajian "${event.nama_event}" telah penuh (${event.kuota} jamaah), sehingga Anda tidak memperoleh tambahan poin. Jazakallahu khairan atas partisipasi & ulasan Anda.`
+      : `Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +${event.poin_value} poin!${sisaKuota !== undefined ? ` (Sisa kuota: ${sisaKuota} jamaah)` : ''}`;
 
     return {
       success: true,
-      message: isRedeem
-        ? `Penukaran berhasil! ${event.poin_value} poin telah ditukarkan untuk "${event.nama_event}". Sisa poin Anda: ${updatedTotal} poin.`
-        : `Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +${event.poin_value} poin!`,
+      message,
       poin_didapat: deltaPoin,
       total_poin_terbaru: updatedTotal,
       event,
       event_type: isRedeem ? 'redeem' : 'append',
+      kuota_penuh: isQuotaFull,
+      kuota_sisa: sisaKuota,
     };
   },
 
@@ -562,6 +596,7 @@ export const api = {
     lokasi?: string;
     waktu?: string;
     deskripsi?: string;
+    kuota?: number;
   }): Promise<ApiResponse<MasterEvent>> {
     const randomSuffix =
       new Date().toISOString().slice(0, 10).replace(/-/g, '') +
@@ -569,12 +604,14 @@ export const api = {
       Math.random().toString(36).substring(2, 7).toUpperCase();
     const qr_token = 'HIJRAH-' + randomSuffix;
     const event_type = eventData.event_type || 'append';
+    const kuota = eventData.kuota && Number(eventData.kuota) > 0 ? Number(eventData.kuota) : undefined;
 
     if (getGasUrl()) {
       try {
         const res = await callGasApi<MasterEvent>('addEvent', {
           ...eventData,
           event_type,
+          kuota: kuota || 0,
           pemateri: eventData.pemateri || '',
           waktu: eventData.waktu || '',
           lokasi: eventData.lokasi || 'Masjid Al Hijrah PTPP',
@@ -586,6 +623,7 @@ export const api = {
           const savedEvent: MasterEvent = {
             ...res.data,
             event_type: res.data.event_type || event_type,
+            kuota: res.data.kuota || kuota,
             pemateri: res.data.pemateri || eventData.pemateri || '',
             waktu: res.data.waktu || eventData.waktu || '',
             lokasi: res.data.lokasi || eventData.lokasi || '',
@@ -617,6 +655,7 @@ export const api = {
       poin_value: Number(eventData.poin_value) || 25,
       status: 'active',
       event_type,
+      kuota,
       pemateri: eventData.pemateri || '',
       lokasi: eventData.lokasi || 'Masjid Al Hijrah PTPP',
       waktu: eventData.waktu || 'Ba\'da Maghrib',

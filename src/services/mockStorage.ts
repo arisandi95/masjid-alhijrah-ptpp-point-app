@@ -32,6 +32,7 @@ const DEFAULT_EVENTS: MasterEvent[] = [
     poin_value: 50,
     status: 'active',
     event_type: 'append',
+    kuota: 50,
     pemateri: 'Ustadz Dr. H. Abdurrahman, M.A.',
     lokasi: 'Ruang Utama Masjid Al Hijrah PTPP',
     waktu: '05:00 - 06:15 WIB',
@@ -98,7 +99,7 @@ const DEFAULT_EVENTS: MasterEvent[] = [
 export const DEFAULT_USERS: User[] = [
   {
     user_id: 'usr_demo_1',
-    nama: 'Ahmad Fauzi (Demo Jamaah)',
+    nama: 'Ahmad Fauzi',
     no_hp: '6281234567890',
     email: 'ahmad.fauzi@ptpp.co.id',
     tanggal_lahir: '1992-06-14',
@@ -243,7 +244,7 @@ const DEFAULT_REVIEWS: EventReview[] = [
     review_id: 'rev_sample_01',
     user_id: 'usr_demo_1',
     event_id: 'evt_subuh_01',
-    nama_jamaah: 'Ahmad Fauzi (Demo Jamaah)',
+    nama_jamaah: 'Ahmad Fauzi',
     nama_event: 'Kajian Subuh: Tafsir Juz Amma & Dzikir Pagi',
     skor_materi: 5,
     skor_kenyamanan: 5,

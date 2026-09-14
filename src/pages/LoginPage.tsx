@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, Phone, UserCheck, AlertCircle, ArrowRight, Loader2, LogIn } from 'lucide-react';
+import { Eye, EyeOff, Lock, Phone, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginPageProps {
@@ -12,7 +12,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState<'user' | 'admin' | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,25 +34,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleQuickLogin = async (phone: string, pinCode: string, role: 'user' | 'admin') => {
-    setNoHp(phone);
-    setPin(pinCode);
-    setErrorMsg(null);
-    setDemoLoading(role);
-    setLoading(true);
-    try {
-      const res = await login(phone, pinCode);
-      if (!res.success) {
-        setErrorMsg(res.error || 'Gagal masuk akun percobaan.');
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Gagal masuk akun percobaan.');
-    } finally {
-      setLoading(false);
-      setDemoLoading(null);
     }
   };
 
@@ -158,78 +138,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
             )}
           </button>
         </form>
-
-        {/* Quick Demo Fill Buttons */}
-        <div className="mt-6 pt-5 border-t border-gray-100">
-          <p className="text-[11px] font-semibold text-[#6B7568] text-center mb-2 uppercase tracking-wider">
-            Akun Percobaan (1-Klik Langsung Masuk)
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleQuickLogin('081234567890', '1234', 'user')}
-              className="px-2.5 py-2.5 rounded-xl bg-[#FAFAF7] border border-gray-200 text-left hover:border-[#0F6B4C]/50 hover:bg-emerald-50/30 transition text-xs group cursor-pointer disabled:opacity-60 relative overflow-hidden shadow-2xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold block text-[#1F2A24] text-[11px] group-hover:text-[#0F6B4C]">
-                  Pak Ahmad
-                </span>
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-[#0F6B4C] border border-emerald-200/80 uppercase">
-                  User
-                </span>
-              </div>
-              <span className="text-[10px] text-[#6B7568] block mt-1 font-mono">PIN: 1234</span>
-              
-              <div className="mt-2 flex items-center justify-between text-[10px] font-semibold text-[#0F6B4C] pt-1.5 border-t border-gray-100">
-                {demoLoading === 'user' ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Masuk...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 group-hover:underline">
-                    <LogIn className="w-3 h-3" />
-                    <span>Masuk Langsung</span>
-                  </span>
-                )}
-                <span className="text-[9px] text-[#6B7568] font-normal">Jamaah</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleQuickLogin('089999999999', '9999', 'admin')}
-              className="px-2.5 py-2.5 rounded-xl bg-[#FAFAF7] border border-amber-200/90 text-left hover:border-amber-400 hover:bg-amber-50/30 transition text-xs group cursor-pointer disabled:opacity-60 relative overflow-hidden shadow-2xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold block text-[#1F2A24] text-[11px] group-hover:text-amber-700">
-                  Admin Takmir
-                </span>
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300/80 uppercase">
-                  Admin
-                </span>
-              </div>
-              <span className="text-[10px] text-[#6B7568] block mt-1 font-mono">PIN: 9999</span>
-              
-              <div className="mt-2 flex items-center justify-between text-[10px] font-semibold text-amber-800 pt-1.5 border-t border-amber-100/80">
-                {demoLoading === 'admin' ? (
-                  <span className="flex items-center gap-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Masuk...</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 group-hover:underline">
-                    <LogIn className="w-3 h-3" />
-                    <span>Masuk Langsung</span>
-                  </span>
-                )}
-                <span className="text-[9px] text-amber-700 font-normal">Takmir</span>
-              </div>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Footer Register Link */}

@@ -71,9 +71,9 @@ function setupSheets() {
   let sheetEvent = ss.getSheetByName("master_event");
   if (!sheetEvent) {
     sheetEvent = ss.insertSheet("master_event");
-    sheetEvent.appendRow(["event_id", "nama_event", "tanggal", "qr_token", "poin_value", "status", "pemateri", "waktu", "lokasi", "event_type", "created_at"]);
+    sheetEvent.appendRow(["event_id", "nama_event", "tanggal", "qr_token", "poin_value", "status", "pemateri", "waktu", "lokasi", "event_type", "kuota", "created_at"]);
   } else {
-    // Auto-migrate master_event headers jika kolom pemateri atau event_type belum ada
+    // Auto-migrate master_event headers jika kolom belum ada
     const lastCol = sheetEvent.getLastColumn() || 1;
     const headers = sheetEvent.getRange(1, 1, 1, lastCol).getValues()[0];
     const headerLower = headers.map(h => (h || "").toString().toLowerCase().trim());
@@ -89,6 +89,9 @@ function setupSheets() {
     }
     if (!headerLower.includes("event_type")) {
       sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("event_type");
+    }
+    if (!headerLower.includes("kuota")) {
+      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("kuota");
     }
   }
   
@@ -400,6 +403,7 @@ function handleRouting(action, params) {
     const waktuCol = eventHeaderMap["waktu"] !== undefined ? eventHeaderMap["waktu"] : 7;
     const lokasiCol = eventHeaderMap["lokasi"] !== undefined ? eventHeaderMap["lokasi"] : 8;
     const eventTypeCol = eventHeaderMap["event_type"];
+    const kuotaCol = eventHeaderMap["kuota"];
 
     let targetEvent = null;
     for (let i = 1; i < eventRows.length; i++) {
@@ -414,6 +418,7 @@ function handleRouting(action, params) {
           poin_value: Number(eventRows[i][poinCol]) || 10,
           status: (eventRows[i][statusCol] || "").toString().toLowerCase(),
           event_type: rawType === "redeem" ? "redeem" : "append",
+          kuota: kuotaCol !== undefined && eventRows[i][kuotaCol] !== "" ? Number(eventRows[i][kuotaCol]) : undefined,
           pemateri: (eventRows[i][pemateriCol] || "").toString(),
           waktu: (eventRows[i][waktuCol] || "").toString(),
           lokasi: (eventRows[i][lokasiCol] || "").toString()
@@ -427,7 +432,7 @@ function handleRouting(action, params) {
     }
 
     if (targetEvent.status !== "active") {
-      return jsonResponse({ success: false, error: "Kajian/item ini sudah tidak aktif atau masa berlakunya telah berakhir.", data: targetEvent });
+      return jsonResponse({ success: false, error: "Kajian/item ini sudah tidak aktif atau masa berlakunya telah berakhir.", event: targetEvent });
     }
 
     // Cek anti-duplicate scan di scan_log
@@ -442,7 +447,7 @@ function handleRouting(action, params) {
           error: targetEvent.event_type === "redeem"
             ? "Kamu sudah menukarkan kupon/item ini sebelumnya."
             : "Kamu sudah absen di event ini. Poin tidak dapat diakumulasi ganda.",
-          data: targetEvent
+          event: targetEvent
         });
       }
     }
@@ -465,14 +470,14 @@ function handleRouting(action, params) {
         return jsonResponse({
           success: false,
           error: "Poin Anda tidak mencukupi untuk penukaran. Poin Anda: " + currentPoin + ", dibutuhkan: " + targetEvent.poin_value + " poin.",
-          data: targetEvent
+          event: targetEvent
         });
       }
     }
 
     return jsonResponse({
       success: true,
-      data: targetEvent,
+      event: targetEvent,
       already_scanned: false,
       requires_review: targetEvent.event_type !== "redeem"
     });
@@ -506,6 +511,7 @@ function handleRouting(action, params) {
     const waktuCol = eventHeaderMap["waktu"] !== undefined ? eventHeaderMap["waktu"] : 7;
     const lokasiCol = eventHeaderMap["lokasi"] !== undefined ? eventHeaderMap["lokasi"] : 8;
     const eventTypeCol = eventHeaderMap["event_type"];
+    const kuotaCol = eventHeaderMap["kuota"];
 
     for (let i = 1; i < eventRows.length; i++) {
       const rowToken = (eventRows[i][qrCol] || "").toString().trim();
@@ -520,6 +526,7 @@ function handleRouting(action, params) {
           poin_value: Number(eventRows[i][poinCol]) || 10,
           status: (eventRows[i][statusCol] || "").toString().toLowerCase(),
           event_type: rawType === "redeem" ? "redeem" : "append",
+          kuota: kuotaCol !== undefined && eventRows[i][kuotaCol] !== "" ? Number(eventRows[i][kuotaCol]) : undefined,
           pemateri: (eventRows[i][pemateriCol] || "").toString(),
           waktu: (eventRows[i][waktuCol] || "").toString(),
           lokasi: (eventRows[i][lokasiCol] || "").toString()
@@ -548,7 +555,7 @@ function handleRouting(action, params) {
           error: targetEvent.event_type === "redeem" 
             ? "Kamu sudah menukarkan kupon/item ini sebelumnya." 
             : "Kamu sudah absen di event ini. Poin tidak dapat diakumulasi ganda.",
-          data: targetEvent
+          event: targetEvent
         });
       }
     }
@@ -579,11 +586,29 @@ function handleRouting(action, params) {
       return jsonResponse({
         success: false,
         error: "Poin Anda tidak mencukupi untuk penukaran. Poin Anda: " + currentPoin + ", dibutuhkan: " + targetEvent.poin_value + " poin.",
-        data: targetEvent
+        event: targetEvent
       });
     }
     
-    const poinDelta = isRedeem ? -targetEvent.poin_value : targetEvent.poin_value;
+    let isQuotaFull = false;
+    let sisaKuota = undefined;
+    if (!isRedeem && targetEvent.kuota && targetEvent.kuota > 0) {
+      let claimedCount = 0;
+      for (let i = 1; i < logRows.length; i++) {
+        const logEvId = (logRows[i][2] || "").toString();
+        const logPoint = Number(logRows[i][3]) || 0;
+        if (logEvId === targetEvent.event_id && logPoint > 0) {
+          claimedCount++;
+        }
+      }
+      if (claimedCount >= targetEvent.kuota) {
+        isQuotaFull = true;
+      } else {
+        sisaKuota = targetEvent.kuota - (claimedCount + 1);
+      }
+    }
+
+    const poinDelta = isRedeem ? -targetEvent.poin_value : isQuotaFull ? 0 : targetEvent.poin_value;
     const newTotalPoin = currentPoin + poinDelta;
     
     // d. Catat ke scan_log
@@ -591,8 +616,10 @@ function handleRouting(action, params) {
     const scanned_at = new Date().toISOString();
     sheetLogs.appendRow([log_id, user_id, targetEvent.event_id, poinDelta, scanned_at]);
     
-    // e. Update total_poin di users secara dinamis
-    sheetUsers.getRange(userRowIdx, poinColUser + 1).setValue(newTotalPoin);
+    // e. Update total_poin di users secara dinamis jika ada perubahan poin
+    if (poinDelta !== 0) {
+      sheetUsers.getRange(userRowIdx, poinColUser + 1).setValue(newTotalPoin);
+    }
 
     // f. Simpan Penilaian Acara (Feedback) jika ada
     const sheetReviews = ss.getSheetByName("penilaian_acara");
@@ -628,14 +655,17 @@ function handleRouting(action, params) {
     
     const successMsg = isRedeem
       ? "Penukaran berhasil! " + targetEvent.poin_value + " poin telah dipotong untuk '" + targetEvent.nama_event + "'. Sisa poin Anda: " + newTotalPoin + " poin."
-      : "Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +" + targetEvent.poin_value + " poin.";
+      : isQuotaFull
+      ? "Evaluasi acara berhasil tersimpan! Namun, mohon maaf kuota perolehan poin untuk kajian '" + targetEvent.nama_event + "' telah penuh (" + targetEvent.kuota + " jamaah), sehingga Anda tidak memperoleh tambahan poin."
+      : "Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +" + targetEvent.poin_value + " poin!" + (sisaKuota !== undefined ? " (Sisa kuota: " + sisaKuota + " jamaah)" : "");
     
     return jsonResponse({
       success: true,
       message: successMsg,
       poin_didapat: poinDelta,
       total_poin_terbaru: newTotalPoin,
-      event: targetEvent
+      event: targetEvent,
+      kuota_penuh: isQuotaFull
     });
   }
   
@@ -748,6 +778,7 @@ function handleRouting(action, params) {
     const waktuIdx = eventHeaderMap["waktu"];
     const lokasiIdx = eventHeaderMap["lokasi"];
     const eventTypeIdx = eventHeaderMap["event_type"];
+    const kuotaIdx = eventHeaderMap["kuota"];
     const createdIdx = eventHeaderMap["created_at"];
     
     for (let i = 1; i < eventRows.length; i++) {
@@ -761,6 +792,7 @@ function handleRouting(action, params) {
           poin_value: Number(eventRows[i][poinIdx]) || 0,
           status: eventRows[i][statusIdx] || "active",
           event_type: rawMode === "redeem" ? "redeem" : "append",
+          kuota: kuotaIdx !== undefined && eventRows[i][kuotaIdx] !== "" ? Number(eventRows[i][kuotaIdx]) : undefined,
           pemateri: pemateriIdx !== undefined ? (eventRows[i][pemateriIdx] || "").toString() : "",
           waktu: waktuIdx !== undefined ? (eventRows[i][waktuIdx] || "").toString() : "",
           lokasi: lokasiIdx !== undefined ? (eventRows[i][lokasiIdx] || "").toString() : "",
@@ -782,6 +814,7 @@ function handleRouting(action, params) {
     const pemateri = (params.pemateri || "").toString().trim();
     const waktu = (params.waktu || "").toString().trim();
     const lokasi = (params.lokasi || "").toString().trim();
+    const kuota = params.kuota !== undefined && params.kuota !== "" ? Number(params.kuota) : "";
     
     // Generate secure random QR token (misal: HIJRAH-xxx-xxx)
     const randomSuffix = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd") + "-" + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -793,7 +826,7 @@ function handleRouting(action, params) {
     const sheetEvents = ss.getSheetByName("master_event");
     const eventHeaderMap = getHeaderMap(sheetEvents);
 
-    // Pastikan kolom pemateri, waktu, lokasi, event_type tersedia di header tabel
+    // Pastikan kolom pemateri, waktu, lokasi, event_type, kuota tersedia di header tabel
     if (eventHeaderMap["pemateri"] === undefined) {
       const newCol = sheetEvents.getLastColumn() + 1;
       sheetEvents.getRange(1, newCol).setValue("pemateri");
@@ -814,6 +847,11 @@ function handleRouting(action, params) {
       sheetEvents.getRange(1, newCol).setValue("event_type");
       eventHeaderMap["event_type"] = newCol - 1;
     }
+    if (eventHeaderMap["kuota"] === undefined) {
+      const newCol = sheetEvents.getLastColumn() + 1;
+      sheetEvents.getRange(1, newCol).setValue("kuota");
+      eventHeaderMap["kuota"] = newCol - 1;
+    }
 
     const totalCols = sheetEvents.getLastColumn();
     const rowData = new Array(totalCols).fill("");
@@ -828,6 +866,7 @@ function handleRouting(action, params) {
     rowData[eventHeaderMap["waktu"]] = waktu;
     rowData[eventHeaderMap["lokasi"]] = lokasi;
     rowData[eventHeaderMap["event_type"]] = event_type;
+    rowData[eventHeaderMap["kuota"]] = kuota;
     if (eventHeaderMap["created_at"] !== undefined) {
       rowData[eventHeaderMap["created_at"]] = created_at;
     }
@@ -845,6 +884,7 @@ function handleRouting(action, params) {
         poin_value: poin_value,
         status: status,
         event_type: event_type,
+        kuota: kuota ? Number(kuota) : undefined,
         pemateri: pemateri,
         waktu: waktu,
         lokasi: lokasi,

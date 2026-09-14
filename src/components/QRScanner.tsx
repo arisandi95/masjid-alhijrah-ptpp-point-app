@@ -9,8 +9,8 @@ import {
   Award,
   UploadCloud,
   Sparkles,
-  Zap,
   Gift,
+  Clock,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -27,7 +27,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
   const [scannerStarted, setScannerStarted] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [activeEvents, setActiveEvents] = useState<MasterEvent[]>([]);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [pendingEvent, setPendingEvent] = useState<MasterEvent | null>(null);
   const [pendingToken, setPendingToken] = useState<string>('');
@@ -82,15 +81,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
       console.warn('Confetti error', e);
     }
   };
-
-  // Fetch active events for quick simulation testing
-  useEffect(() => {
-    api.getEvents().then((res) => {
-      if (res.success && res.data) {
-        setActiveEvents(res.data);
-      }
-    });
-  }, []);
 
   // Initialize and start scanner
   useEffect(() => {
@@ -243,8 +233,12 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
       setScanResult(result);
 
       if (result.success) {
-        playBeep(true);
-        triggerConfetti();
+        if (result.kuota_penuh || (result.poin_didapat ?? 0) === 0) {
+          playBeep(false);
+        } else {
+          playBeep(true);
+          triggerConfetti();
+        }
         if (result.total_poin_terbaru !== undefined) {
           updateUserPoints(result.total_poin_terbaru);
         } else {
@@ -352,7 +346,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
             </div>
             <h4 className="text-sm font-bold text-[#1F2A24] font-heading">Kamera Belum Aktif</h4>
             <p className="text-xs text-[#6B7568] mt-1 max-w-xs leading-relaxed">
-              Izinkan akses kamera di browser Anda atau gunakan upload foto QR / tombol simulasi di bawah.
+              Izinkan akses kamera di browser Anda atau gunakan upload foto QR di bawah.
             </p>
 
             <label className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold shadow-xs cursor-pointer active:scale-95 transition">
@@ -367,6 +361,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
       {/* Result Dialog Modal */}
       {scanResult && (() => {
         const isRedeem = scanResult.event?.event_type === 'redeem' || (scanResult.poin_didapat !== undefined && scanResult.poin_didapat < 0);
+        const isQuotaFull = scanResult.kuota_penuh || (!isRedeem && scanResult.poin_didapat === 0);
         const isInsufficientPoints = (scanResult.message || '').toLowerCase().includes('tidak mencukupi');
 
         return (
@@ -376,16 +371,31 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
                 <>
                   <div
                     className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-xs ${
-                      isRedeem ? 'bg-rose-50 text-rose-600' : 'bg-[#E8F3EE] text-[#0F6B4C]'
+                      isRedeem
+                        ? 'bg-rose-50 text-rose-600'
+                        : isQuotaFull
+                        ? 'bg-amber-50 text-amber-600'
+                        : 'bg-[#E8F3EE] text-[#0F6B4C]'
                     }`}
                   >
-                    {isRedeem ? <Gift className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+                    {isRedeem ? (
+                      <Gift className="w-8 h-8" />
+                    ) : isQuotaFull ? (
+                      <AlertCircle className="w-8 h-8" />
+                    ) : (
+                      <CheckCircle className="w-8 h-8" />
+                    )}
                   </div>
 
                   {isRedeem ? (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs mb-2">
                       <Gift className="w-3.5 h-3.5" />
                       <span>-{Math.abs(scanResult.poin_didapat ?? scanResult.event?.poin_value ?? 0)} Poin Ditukarkan (Redeem)</span>
+                    </div>
+                  ) : isQuotaFull ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-800 font-bold text-xs mb-2">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Kuota Poin Acara Penuh (0 Poin)</span>
                     </div>
                   ) : (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#856404] font-bold text-xs mb-2">
@@ -395,9 +405,13 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
                   )}
 
                   <h3 className="text-lg font-bold text-[#1F2A24] font-heading">
-                    {isRedeem ? 'Penukaran Berhasil' : 'Absensi Berhasil'}
+                    {isRedeem
+                      ? 'Penukaran Berhasil'
+                      : isQuotaFull
+                      ? 'Penilaian Berhasil Dikirim'
+                      : 'Absensi Berhasil'}
                   </h3>
-                  <p className="text-xs text-[#6B7568] mt-1.5 px-2">
+                  <p className="text-xs text-[#6B7568] mt-1.5 px-2 leading-relaxed">
                     {scanResult.message}
                   </p>
 
@@ -475,7 +489,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
         );
       })()}
 
-      {/* Alternative Controls: File Upload & Quick Test Trigger */}
+      {/* Alternative Controls: File Upload */}
       <div className="mt-4 space-y-2 max-w-sm mx-auto">
         <div className="flex items-center justify-between gap-2">
           <label className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-[#1F2A24] hover:bg-gray-50 cursor-pointer shadow-2xs transition">
@@ -483,55 +497,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
             <span>Upload Foto QR</span>
             <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
           </label>
-        </div>
-
-        {/* Quick Simulation Testing Box (Essential for seamless AI Studio test without 2nd screen) */}
-        <div className="p-3 bg-white rounded-2xl border border-gray-100 shadow-2xs text-left">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-bold text-[#0F6B4C] flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-[#D4AF37]" />
-              Simulasi Uji Coba Scan:
-            </span>
-            <span className="text-[10px] text-[#6B7568]">Klik untuk tes</span>
-          </div>
-
-          <div className="space-y-1.5">
-            {activeEvents.slice(0, 5).map((ev) => {
-              const isRedeemMode = ev.event_type === 'redeem';
-              return (
-                <button
-                  key={ev.event_id}
-                  onClick={() => handleDecodedToken(ev.qr_token)}
-                  disabled={isProcessing}
-                  className={`w-full text-left px-2.5 py-2 rounded-lg text-xs border flex items-center justify-between transition group active:scale-98 ${
-                    isRedeemMode
-                      ? 'bg-rose-50/40 hover:bg-rose-50 border-rose-100'
-                      : 'bg-[#FAFAF7] hover:bg-[#E8F3EE] border-gray-100'
-                  }`}
-                >
-                  <div className="truncate pr-2">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-semibold text-[#1F2A24] text-[11px] truncate group-hover:text-[#0F6B4C]">
-                        {ev.nama_event}
-                      </p>
-                    </div>
-                    <p className="text-[10px] text-[#6B7568]">
-                      Mode: <span className={isRedeemMode ? 'text-rose-600 font-bold' : 'text-emerald-700 font-bold'}>{isRedeemMode ? 'Redeem (Potong Poin)' : 'Append (Tambah Poin)'}</span> • Token: <code className="text-gray-700">{ev.qr_token}</code>
-                    </p>
-                  </div>
-                  {isRedeemMode ? (
-                    <span className="shrink-0 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-md border border-rose-200">
-                      -{ev.poin_value} Redeem
-                    </span>
-                  ) : (
-                    <span className="shrink-0 text-[10px] font-bold text-[#D4AF37] bg-amber-50 px-1.5 py-0.5 rounded-md border border-[#D4AF37]/30">
-                      +{ev.poin_value} Poin
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 

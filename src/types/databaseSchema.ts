@@ -65,6 +65,7 @@ export interface MasterEvent {
   lokasi?: string;          // Lokasi kajian (contoh: 'Ruang Utama Masjid Al Hijrah PTPP')
   waktu?: string;           // Jam pelaksanaan (contoh: 'Ba\'da Maghrib (18:30 WIB)')
   event_type?: EventType;   // 'append' (tambah poin) | 'redeem' (tukar kupon/potong poin)
+  kuota?: number;           // Batas maksimal kuota jamaah yang berhak mendapat poin (opsional / 0 = tanpa batas)
   deskripsi?: string;       // Keterangan tambahan (opsional)
   created_at: string;       // Timestamp pembuatan event (ISO 8601)
 }
@@ -132,6 +133,8 @@ export interface ScanResult {
   event?: MasterEvent;
   event_type?: EventType;
   already_scanned?: boolean;
+  kuota_penuh?: boolean;
+  kuota_sisa?: number;
 }
 
 /**
@@ -173,6 +176,8 @@ export const MASTER_EVENT_TABLE_HEADERS = [
   'waktu',
   'lokasi',
   'event_type',
+  'kuota',
+  'created_at',
 ] as const;
 
 export const SCAN_LOG_TABLE_HEADERS = [
@@ -269,6 +274,8 @@ export const MASTER_EVENT_SCHEMA: TableStructureMeta = {
     { field: 'waktu', header: 'waktu', type: 'string', required: false, description: 'Waktu pelaksanaan acara', example: "Ba'da Subuh (05:00 WIB)" },
     { field: 'lokasi', header: 'lokasi', type: 'string', required: false, description: 'Tempat penyelenggaraan', example: 'Ruang Utama Masjid Al Hijrah PTPP' },
     { field: 'event_type', header: 'event_type', type: 'enum', required: true, description: 'Mode: append (tambah poin kajian) atau redeem (tukar kupon)', example: 'append', options: ['append', 'redeem'] },
+    { field: 'kuota', header: 'kuota', type: 'number', required: false, description: 'Batas maksimal kuota jamaah yang berhak mendapat poin (kosong/0 = tanpa batas)', example: 50 },
+    { field: 'created_at', header: 'created_at', type: 'datetime', required: true, description: 'Waktu pembuatan event (ISO 8601)', example: '2026-09-15T04:00:00.000Z' },
   ],
 };
 

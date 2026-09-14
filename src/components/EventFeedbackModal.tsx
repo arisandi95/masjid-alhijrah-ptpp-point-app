@@ -10,6 +10,7 @@ import {
   Calendar,
   Clock,
   UserCheck,
+  Users,
 } from 'lucide-react';
 import { MasterEvent, EventReviewInput } from '../types';
 
@@ -104,9 +105,17 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
             <X className="w-4 h-4" />
           </button>
 
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#f7e7b4] text-[11px] font-bold mb-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Klaim +{event.poin_value} Poin Jamaah</span>
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 text-[#f7e7b4] text-[11px] font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <span>+{event.poin_value} Poin Jamaah</span>
+            </div>
+            {event.kuota ? (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 text-white text-[11px] font-medium">
+                <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+                <span>Kuota: {event.kuota} Jamaah</span>
+              </div>
+            ) : null}
           </div>
 
           <h2 className="text-base font-bold font-heading leading-snug pr-8 text-white">
@@ -145,7 +154,7 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
             </h3>
             <p className="text-[11px] text-[#1F2A24] mt-0.5 leading-relaxed">
               Silakan beri penilaian Anda dengan skala 1 sampai 5. Keterangan: <strong>1 = Sangat Kurang</strong>, <strong>5 = Sangat Baik</strong>.
-              Poin akan otomatis ditambahkan ke akun Anda setelah mengirimkan penilaian.
+              Setelah formulir dikirim, sistem akan memverifikasi ketersediaan kuota poin acara ini.
             </p>
           </div>
 

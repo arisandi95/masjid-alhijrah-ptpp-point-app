@@ -62,6 +62,7 @@ export const AdminEventPage: React.FC = () => {
   const [newTanggal, setNewTanggal] = useState(new Date().toISOString().split('T')[0]);
   const [newPoin, setNewPoin] = useState(25);
   const [newEventType, setNewEventType] = useState<'append' | 'redeem'>('append');
+  const [newKuota, setNewKuota] = useState<string>('');
   const [newPemateri, setNewPemateri] = useState('');
   const [newLokasi, setNewLokasi] = useState('Ruang Utama Masjid Al Hijrah PTPP');
   const [newWaktu, setNewWaktu] = useState('Ba\'da Maghrib (18:30 WIB)');
@@ -103,6 +104,7 @@ export const AdminEventPage: React.FC = () => {
 
     setSubmitting(true);
     try {
+      const kuotaNum = newKuota.trim() ? Number(newKuota) : undefined;
       const res = await api.addEvent({
         nama_event: newNama.trim(),
         tanggal: newTanggal,
@@ -111,6 +113,7 @@ export const AdminEventPage: React.FC = () => {
         pemateri: newPemateri.trim(),
         lokasi: newLokasi.trim(),
         waktu: newWaktu.trim(),
+        kuota: kuotaNum,
       });
 
       if (res.success && res.data) {
@@ -122,6 +125,7 @@ export const AdminEventPage: React.FC = () => {
         setNewNama('');
         setNewPemateri('');
         setNewEventType('append');
+        setNewKuota('');
       }
     } finally {
       setSubmitting(false);
@@ -410,6 +414,7 @@ export const AdminEventPage: React.FC = () => {
                       <th className="px-3 py-2.5 whitespace-nowrap">Pemateri / PJ</th>
                       <th className="px-3 py-2.5 whitespace-nowrap">Tanggal & Waktu</th>
                       <th className="px-3 py-2.5 text-center whitespace-nowrap">Poin</th>
+                      <th className="px-3 py-2.5 text-center whitespace-nowrap">Kuota</th>
                       <th className="px-3 py-2.5 text-center whitespace-nowrap">Status</th>
                       <th className="px-3 py-2.5 text-right whitespace-nowrap">QR Code</th>
                     </tr>
@@ -417,6 +422,11 @@ export const AdminEventPage: React.FC = () => {
                   <tbody className="divide-y divide-gray-100">
                     {events.map((ev) => {
                       const isRedeem = ev.event_type === 'redeem';
+                      const claimed = allLogs.filter(
+                        (l) => l.event_id === ev.event_id && (l.poin_didapat || 0) > 0
+                      ).length;
+                      const isFull = ev.kuota ? claimed >= ev.kuota : false;
+
                       return (
                         <tr key={ev.event_id} className="hover:bg-emerald-50/20 transition">
                           <td className="px-3 py-2.5">
@@ -467,7 +477,24 @@ export const AdminEventPage: React.FC = () => {
                               </span>
                             )}
                           </td>
-                        <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                          <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                            {ev.kuota ? (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isFull
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                }`}
+                                title={`Terisi ${claimed} dari kuota ${ev.kuota}`}
+                              >
+                                <Users className="w-2.5 h-2.5" />
+                                <span>{claimed}/{ev.kuota} {isFull ? '(Penuh)' : ''}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">Unlimited</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-center whitespace-nowrap">
                           <button
                             onClick={() => handleToggleStatus(ev.event_id)}
                             className="inline-flex items-center cursor-pointer"
@@ -531,6 +558,28 @@ export const AdminEventPage: React.FC = () => {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-[#0F6B4C] border border-emerald-200">
                               <PlusCircle className="w-2.5 h-2.5" />
                               <span>Append</span>
+                            </span>
+                          )}
+                          {ev.kuota ? (() => {
+                            const claimed = allLogs.filter(
+                              (l) => l.event_id === ev.event_id && (l.poin_didapat || 0) > 0
+                            ).length;
+                            const isFull = claimed >= ev.kuota;
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isFull
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
+                                }`}
+                              >
+                                <Users className="w-2.5 h-2.5" />
+                                <span>Kuota: {claimed}/{ev.kuota} {isFull ? '(Penuh)' : ''}</span>
+                              </span>
+                            );
+                          })() : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-50 text-gray-500 border border-gray-200">
+                              <span>Kuota: Unlimited</span>
                             </span>
                           )}
                         </div>
@@ -1415,6 +1464,30 @@ export const AdminEventPage: React.FC = () => {
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7]"
                 />
+              </div>
+
+              {/* Field Kuota Acara / Kajian */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1F2A24]">
+                    {newEventType === 'redeem' ? 'Kuota Penukaran Voucher' : 'Kuota Jamaah (Penerima Poin)'}
+                  </label>
+                  <span className="text-[10px] text-[#6B7568]">
+                    Kosongkan jika tanpa batas
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  value={newKuota}
+                  onChange={(e) => setNewKuota(e.target.value)}
+                  placeholder="Contoh: 50 (Kosongkan jika unlimited)"
+                  min={1}
+                  max={10000}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7]"
+                />
+                <p className="text-[10px] text-[#6B7568] mt-1 leading-relaxed">
+                  Setelah jamaah mengisi form evaluasi acara, sistem mengecek kuota ini. Jika kuota sudah penuh, jamaah tidak mendapatkan poin.
+                </p>
               </div>
 
               <button
