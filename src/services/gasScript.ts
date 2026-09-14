@@ -492,7 +492,15 @@ function handleRouting(action, params) {
       return jsonResponse({ success: false, error: "User ID dan Token QR wajib disertakan" });
     }
     
-    const sheetEvents = ss.getSheetByName("master_event");
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(10000);
+    } catch (e) {
+      return jsonResponse({ success: false, error: "Sistem sedang sibuk. Silakan coba lagi." });
+    }
+    
+    try {
+      const sheetEvents = ss.getSheetByName("master_event");
     const sheetLogs = ss.getSheetByName("scan_log");
     const sheetUsers = ss.getSheetByName("users");
     
@@ -545,10 +553,14 @@ function handleRouting(action, params) {
     
     // b. Cek anti-duplicate scan di scan_log (user_id + event_id)
     const logRows = sheetLogs.getDataRange().getValues();
+    const logHeaderMapDuplicate = getHeaderMap(sheetLogs);
+    const logUserIdCol = logHeaderMapDuplicate["user_id"] !== undefined ? logHeaderMapDuplicate["user_id"] : 1;
+    const logEventIdCol = logHeaderMapDuplicate["event_id"] !== undefined ? logHeaderMapDuplicate["event_id"] : 2;
+
     for (let i = 1; i < logRows.length; i++) {
-      const logUserId = (logRows[i][1] || "").toString();
-      const logEventId = (logRows[i][2] || "").toString();
-      if (logUserId === user_id && logEventId === targetEvent.event_id) {
+      const logUserId = (logRows[i][logUserIdCol] || "").toString().trim();
+      const logEventId = (logRows[i][logEventIdCol] || "").toString().trim();
+      if (logUserId === user_id.toString().trim() && logEventId === targetEvent.event_id.toString().trim()) {
         return jsonResponse({
           success: false,
           already_scanned: true,
@@ -592,12 +604,18 @@ function handleRouting(action, params) {
     
     let isQuotaFull = false;
     let sisaKuota = undefined;
+    
+    // Gunakan header map untuk scan_log agar aman jika ada perubahan kolom
+    const logHeaderMap = getHeaderMap(sheetLogs);
+    const logEvIdCol = logHeaderMap["event_id"] !== undefined ? logHeaderMap["event_id"] : 2;
+    const logPointCol = logHeaderMap["poin_didapat"] !== undefined ? logHeaderMap["poin_didapat"] : 3;
+
     if (!isRedeem && targetEvent.kuota && targetEvent.kuota > 0) {
       let claimedCount = 0;
       for (let i = 1; i < logRows.length; i++) {
-        const logEvId = (logRows[i][2] || "").toString();
-        const logPoint = Number(logRows[i][3]) || 0;
-        if (logEvId === targetEvent.event_id && logPoint > 0) {
+        const logEvId = (logRows[i][logEvIdCol] || "").toString().trim();
+        const logPoint = Number(logRows[i][logPointCol]) || 0;
+        if (logEvId === targetEvent.event_id.toString().trim() && logPoint > 0) {
           claimedCount++;
         }
       }
@@ -611,10 +629,28 @@ function handleRouting(action, params) {
     const poinDelta = isRedeem ? -targetEvent.poin_value : isQuotaFull ? 0 : targetEvent.poin_value;
     const newTotalPoin = currentPoin + poinDelta;
     
-    // d. Catat ke scan_log
+    // d. Catat ke scan_log secara dinamis
     const log_id = generateUUID();
     const scanned_at = new Date().toISOString();
-    sheetLogs.appendRow([log_id, user_id, targetEvent.event_id, poinDelta, scanned_at]);
+    
+    const totalLogCols = sheetLogs.getLastColumn() || 5;
+    const newLogData = new Array(totalLogCols).fill("");
+    if (logHeaderMap["log_id"] !== undefined) newLogData[logHeaderMap["log_id"]] = log_id;
+    else newLogData[0] = log_id;
+    
+    if (logHeaderMap["user_id"] !== undefined) newLogData[logHeaderMap["user_id"]] = user_id;
+    else newLogData[1] = user_id;
+    
+    if (logHeaderMap["event_id"] !== undefined) newLogData[logHeaderMap["event_id"]] = targetEvent.event_id;
+    else newLogData[2] = targetEvent.event_id;
+    
+    if (logHeaderMap["poin_didapat"] !== undefined) newLogData[logHeaderMap["poin_didapat"]] = poinDelta;
+    else newLogData[3] = poinDelta;
+    
+    if (logHeaderMap["scanned_at"] !== undefined) newLogData[logHeaderMap["scanned_at"]] = scanned_at;
+    else newLogData[4] = scanned_at;
+    
+    sheetLogs.appendRow(newLogData);
     
     // e. Update total_poin di users secara dinamis jika ada perubahan poin
     if (poinDelta !== 0) {
@@ -667,8 +703,11 @@ function handleRouting(action, params) {
       event: targetEvent,
       kuota_penuh: isQuotaFull
     });
+    } finally {
+      lock.releaseLock();
+    }
   }
-  
+
   // 4. GET PROFILE
   if (action === "getProfile") {
     const user_id = params.user_id;
@@ -893,7 +932,73 @@ function handleRouting(action, params) {
     });
   }
   
-  // 8. GET LEADERBOARD / DAFTAR JAMAAH
+  // 8. GET ALL LOGS (Admin rekap)
+  if (action === "getAllLogs") {
+    const sheetLogs = ss.getSheetByName("scan_log");
+    const sheetEvents = ss.getSheetByName("master_event");
+    const sheetUsers = ss.getSheetByName("users");
+
+    if (!sheetLogs || !sheetEvents || !sheetUsers) {
+      return jsonResponse({ success: true, data: [] });
+    }
+
+    const logsData = sheetLogs.getDataRange().getValues();
+    const eventsData = sheetEvents.getDataRange().getValues();
+    const usersData = sheetUsers.getDataRange().getValues();
+
+    if (logsData.length <= 1) return jsonResponse({ success: true, data: [] });
+
+    const logHeader = getHeaderMap(sheetLogs);
+    const eventHeader = getHeaderMap(sheetEvents);
+    const userHeader = getHeaderMap(sheetUsers);
+
+    const eventMap = {};
+    for (let i = 1; i < eventsData.length; i++) {
+      const eid = eventsData[i][eventHeader["event_id"] !== undefined ? eventHeader["event_id"] : 0];
+      const ename = eventsData[i][eventHeader["nama_event"] !== undefined ? eventHeader["nama_event"] : 1];
+      const etgl = eventsData[i][eventHeader["tanggal"] !== undefined ? eventHeader["tanggal"] : 2];
+      if (eid) eventMap[eid.toString()] = { nama: ename, tanggal: etgl };
+    }
+
+    const userMap = {};
+    for (let i = 1; i < usersData.length; i++) {
+      const uid = usersData[i][userHeader["user_id"] !== undefined ? userHeader["user_id"] : 0];
+      const uname = usersData[i][userHeader["nama"] !== undefined ? userHeader["nama"] : 1];
+      const uhp = usersData[i][userHeader["no_hp"] !== undefined ? userHeader["no_hp"] : 2];
+      if (uid) userMap[uid.toString()] = { nama: uname, no_hp: uhp };
+    }
+
+    const logsList = [];
+    for (let i = logsData.length - 1; i >= 1; i--) {
+      const log_id = logsData[i][logHeader["log_id"] !== undefined ? logHeader["log_id"] : 0];
+      const user_id = logsData[i][logHeader["user_id"] !== undefined ? logHeader["user_id"] : 1];
+      const event_id = logsData[i][logHeader["event_id"] !== undefined ? logHeader["event_id"] : 2];
+      const poin = Number(logsData[i][logHeader["poin_didapat"] !== undefined ? logHeader["poin_didapat"] : 3]) || 0;
+      const scanned_at = logsData[i][logHeader["scanned_at"] !== undefined ? logHeader["scanned_at"] : 4];
+      const evType = logsData[i][logHeader["event_type"]] || "append";
+
+      if (log_id) {
+        const str_uid = user_id.toString();
+        const str_eid = event_id.toString();
+        logsList.push({
+          log_id: log_id.toString(),
+          user_id: str_uid,
+          event_id: str_eid,
+          poin_didapat: poin,
+          scanned_at: scanned_at.toString(),
+          event_type: evType.toString(),
+          nama_event: eventMap[str_eid] ? eventMap[str_eid].nama : "Kajian",
+          tanggal: eventMap[str_eid] ? eventMap[str_eid].tanggal : "",
+          nama_user: userMap[str_uid] ? userMap[str_uid].nama : "Jamaah",
+          no_hp: userMap[str_uid] ? userMap[str_uid].no_hp : ""
+        });
+      }
+    }
+    
+    return jsonResponse({ success: true, data: logsList });
+  }
+
+  // 8.5 GET LEADERBOARD / DAFTAR JAMAAH
   if (action === "getLeaderboard") {
     const sheetUsers = ss.getSheetByName("users");
     const userHeaderMap = getHeaderMap(sheetUsers);

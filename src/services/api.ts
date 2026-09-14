@@ -268,10 +268,16 @@ export const api = {
 
     if (getGasUrl()) {
       try {
-        const gasResult = await callGasApi<MasterEvent>('validateQR', {
+        const gasResult = await callGasApi<any>('validateQR', {
           user_id: userId,
           qr_token: tokenClean,
         });
+        if (gasResult.success) {
+           return {
+             ...gasResult,
+             data: gasResult.data?.event || gasResult.data,
+           };
+        }
         return gasResult;
       } catch (e: any) {
         if (e.message !== 'NO_GAS_URL') {
@@ -689,6 +695,15 @@ export const api = {
 
   // 9. GET ALL LOGS (Admin rekap)
   async getAllLogs(): Promise<ApiResponse<ScanLog[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<ScanLog[]>('getAllLogs');
+        return res;
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getAllLogs error:', e);
+      }
+    }
+
     const logs = getLocalLogs();
     const events = getLocalEvents();
     const users = getLocalUsers();
@@ -708,6 +723,15 @@ export const api = {
 
   // 10. GET LEADERBOARD (Admin / Komunitas)
   async getLeaderboard(): Promise<ApiResponse<User[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<User[]>('getLeaderboard');
+        return res;
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getLeaderboard error:', e);
+      }
+    }
+
     const users = getLocalUsers();
     const sorted = [...users].sort((a, b) => (b.total_poin || 0) - (a.total_poin || 0));
     return { success: true, data: sorted };
@@ -715,6 +739,22 @@ export const api = {
 
   // 11. UPDATE USER ROLE (Admin can toggle user <-> admin)
   async updateUserRole(userId: string, newRole: 'user' | 'admin'): Promise<ApiResponse<User>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<User>('updateUserRole', { user_id: userId, role: newRole });
+        if (res.success) {
+          const lRes = await callGasApi<User[]>('getLeaderboard');
+          if (lRes.success && lRes.data) {
+            const upd = lRes.data.find(u => u.user_id === userId);
+            if (upd) return { success: true, data: upd, message: res.message };
+          }
+        }
+        return res;
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS updateUserRole error:', e);
+      }
+    }
+
     const users = getLocalUsers();
     const targetIndex = users.findIndex((u) => u.user_id === userId);
     if (targetIndex === -1) {
@@ -736,9 +776,7 @@ export const api = {
     if (getGasUrl()) {
       try {
         const res = await callGasApi<EventReview[]>('getReviews');
-        if (res.success && res.data) {
-          return res;
-        }
+        return res;
       } catch (e) {
         // Fallback to local
       }

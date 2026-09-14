@@ -230,6 +230,7 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
                 value={kesanTerbaik}
                 onChange={(e) => setKesanTerbaik(e.target.value)}
                 placeholder="Tuliskan kesan terbaik Anda di sini..."
+                required
                 className="w-full text-xs p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C]/20 focus:border-[#0F6B4C] bg-white transition resize-none"
               />
             </div>
@@ -251,6 +252,7 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
                 value={halKurang}
                 onChange={(e) => setHalKurang(e.target.value)}
                 placeholder="Tuliskan masukan atau kekurangan yang dirasakan..."
+                required
                 className="w-full text-xs p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C]/20 focus:border-[#0F6B4C] bg-white transition resize-none"
               />
             </div>
@@ -269,6 +271,7 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
                 value={usulanKegiatan}
                 onChange={(e) => setUsulanKegiatan(e.target.value)}
                 placeholder="Tuliskan usulan tema atau narasumber yang diharapkan..."
+                required
                 className="w-full text-xs p-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C]/20 focus:border-[#0F6B4C] bg-white transition resize-none"
               />
             </div>
