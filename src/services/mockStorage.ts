@@ -4,10 +4,16 @@ const USERS_KEY = 'alhijrah_users_db';
 const EVENTS_KEY = 'alhijrah_events_db';
 const LOGS_KEY = 'alhijrah_logs_db';
 const REVIEWS_KEY = 'alhijrah_reviews_db';
+const COMPANIES_KEY = 'alhijrah_companies_db';
+const UNITS_KEY = 'alhijrah_units_db';
 const GAS_URL_KEY = 'alhijrah_gas_webapp_url';
 
 export function getGasUrl(): string {
   try {
+    const envUrl = import.meta.env.VITE_GAS_URL || import.meta.env.GAS_URL;
+    if (envUrl) {
+      return envUrl;
+    }
     return localStorage.getItem(GAS_URL_KEY) || '';
   } catch {
     return '';
@@ -104,7 +110,9 @@ export const DEFAULT_USERS: User[] = [
     email: 'ahmad.fauzi@ptpp.co.id',
     tanggal_lahir: '1992-06-14',
     jenis_kelamin: 'pria',
-    status_jamaah: 'Pegawai/PTPP',
+    status_pegawai: 'Organik',
+    company_id: 'COMP_1',
+    unit_id: 'UNIT_1',
     pin: '1234',
     total_poin: 50,
     role: 'user',
@@ -116,12 +124,28 @@ export const DEFAULT_USERS: User[] = [
     no_hp: '6289999999999',
     email: 'admin.masjid@ptpp.co.id',
     jenis_kelamin: 'pria',
-    status_jamaah: 'Pegawai/PTPP',
+    status_pegawai: 'Organik',
+    company_id: 'COMP_1',
+    unit_id: 'UNIT_1',
     pin: '9999',
     total_poin: 120,
     role: 'admin',
     created_at: '2026-01-01T08:00:00.000Z',
   },
+];
+
+export const DEFAULT_COMPANIES = [
+  { company_id: 'COMP_1', company_name: 'PT PP (Persero) Tbk' },
+  { company_id: 'COMP_2', company_name: 'PT PP Presisi Tbk' },
+  { company_id: 'COMP_3', company_name: 'PT PP Properti Tbk' },
+];
+
+export const DEFAULT_UNITS = [
+  { unit_id: 'UNIT_1', company_id: 'COMP_1', unit_name: 'Divisi Gedung 1' },
+  { unit_id: 'UNIT_2', company_id: 'COMP_1', unit_name: 'Divisi Gedung 2' },
+  { unit_id: 'UNIT_3', company_id: 'COMP_1', unit_name: 'Divisi Infrastruktur' },
+  { unit_id: 'UNIT_4', company_id: 'COMP_2', unit_name: 'Divisi Alat Berat' },
+  { unit_id: 'UNIT_5', company_id: 'COMP_3', unit_name: 'Divisi Residensial' },
 ];
 
 const DEFAULT_LOGS: ScanLog[] = [
@@ -135,6 +159,32 @@ const DEFAULT_LOGS: ScanLog[] = [
     tanggal: new Date().toISOString().split('T')[0],
   },
 ];
+
+export function getLocalCompanies(): any[] {
+  try {
+    const raw = localStorage.getItem(COMPANIES_KEY);
+    if (!raw) {
+      localStorage.setItem(COMPANIES_KEY, JSON.stringify(DEFAULT_COMPANIES));
+      return [...DEFAULT_COMPANIES];
+    }
+    return JSON.parse(raw);
+  } catch {
+    return [...DEFAULT_COMPANIES];
+  }
+}
+
+export function getLocalUnits(): any[] {
+  try {
+    const raw = localStorage.getItem(UNITS_KEY);
+    if (!raw) {
+      localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
+      return [...DEFAULT_UNITS];
+    }
+    return JSON.parse(raw);
+  } catch {
+    return [...DEFAULT_UNITS];
+  }
+}
 
 export function getLocalUsers(): User[] {
   try {

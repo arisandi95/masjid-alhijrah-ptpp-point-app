@@ -7,7 +7,7 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * Absensi & Poin Kajian via QR Code
  * 
  * Petunjuk Deploy:
- * 1. Buka spreadsheet Google Sheets (script otomatis menyiapkan 4 sheet: "users", "master_event", "scan_log", dan "penilaian_acara")
+ * 1. Buka spreadsheet Google Sheets (script otomatis menyiapkan 6 sheet: "users", "master_event", "scan_log", "penilaian_acara", "company", dan "unit")
  * 2. Menu Extensions -> Apps Script
  * 3. Hapus kode bawaan, paste seluruh kode ini
  * 4. Klik "Deploy" -> "New deployment"
@@ -121,6 +121,20 @@ function setupSheets() {
       "usulan_kegiatan",
       "submitted_at"
     ]);
+  }
+
+  // 5. Sheet company
+  let sheetCompany = ss.getSheetByName("company");
+  if (!sheetCompany) {
+    sheetCompany = ss.insertSheet("company");
+    sheetCompany.appendRow(["company_id", "company_name"]);
+  }
+
+  // 6. Sheet unit
+  let sheetUnit = ss.getSheetByName("unit");
+  if (!sheetUnit) {
+    sheetUnit = ss.insertSheet("unit");
+    sheetUnit.appendRow(["unit_id", "company_id", "unit_name"]);
   }
 }
 
@@ -262,6 +276,21 @@ function handleRouting(action, params) {
       sheetUsers.getRange(1, newCol).setValue("status_jamaah");
       userHeaderMap["status_jamaah"] = newCol - 1;
     }
+    if (userHeaderMap["status_pegawai"] === undefined) {
+      const newCol = sheetUsers.getLastColumn() + 1;
+      sheetUsers.getRange(1, newCol).setValue("status_pegawai");
+      userHeaderMap["status_pegawai"] = newCol - 1;
+    }
+    if (userHeaderMap["company_id"] === undefined) {
+      const newCol = sheetUsers.getLastColumn() + 1;
+      sheetUsers.getRange(1, newCol).setValue("company_id");
+      userHeaderMap["company_id"] = newCol - 1;
+    }
+    if (userHeaderMap["unit_id"] === undefined) {
+      const newCol = sheetUsers.getLastColumn() + 1;
+      sheetUsers.getRange(1, newCol).setValue("unit_id");
+      userHeaderMap["unit_id"] = newCol - 1;
+    }
     if (userHeaderMap["role"] === undefined) {
       const newCol = sheetUsers.getLastColumn() + 1;
       sheetUsers.getRange(1, newCol).setValue("role");
@@ -282,6 +311,9 @@ function handleRouting(action, params) {
     if (userHeaderMap["tanggal_lahir"] !== undefined) rowData[userHeaderMap["tanggal_lahir"]] = tanggal_lahir;
     if (userHeaderMap["jenis_kelamin"] !== undefined) rowData[userHeaderMap["jenis_kelamin"]] = jenis_kelamin;
     if (userHeaderMap["status_jamaah"] !== undefined) rowData[userHeaderMap["status_jamaah"]] = status_jamaah;
+    if (userHeaderMap["status_pegawai"] !== undefined) rowData[userHeaderMap["status_pegawai"]] = params.status_pegawai || "";
+    if (userHeaderMap["company_id"] !== undefined) rowData[userHeaderMap["company_id"]] = params.company_id || "";
+    if (userHeaderMap["unit_id"] !== undefined) rowData[userHeaderMap["unit_id"]] = params.unit_id || "";
     // PIN DISIMPAN PLAIN TEXT (TIDAK DIENKRIPSI) SESUAI INSTRUKSI
     const pinCol = userHeaderMap["pin"] !== undefined ? userHeaderMap["pin"] : 3;
     rowData[pinCol] = pin;
@@ -305,6 +337,9 @@ function handleRouting(action, params) {
         tanggal_lahir: tanggal_lahir,
         jenis_kelamin: jenis_kelamin,
         status_jamaah: status_jamaah,
+        status_pegawai: params.status_pegawai || "",
+        company_id: params.company_id || "",
+        unit_id: params.unit_id || "",
         total_poin: total_poin,
         role: role,
         created_at: created_at
@@ -337,6 +372,9 @@ function handleRouting(action, params) {
     const tglCol = userHeaderMap["tanggal_lahir"];
     const jkCol = userHeaderMap["jenis_kelamin"];
     const statusCol = userHeaderMap["status_jamaah"];
+    const spCol = userHeaderMap["status_pegawai"];
+    const compCol = userHeaderMap["company_id"];
+    const unitCol = userHeaderMap["unit_id"];
     
     for (let i = 1; i < data.length; i++) {
       const rowPhone = sanitizePhone(data[i][phoneCol] ? data[i][phoneCol].toString() : "");
@@ -368,6 +406,9 @@ function handleRouting(action, params) {
               tanggal_lahir: tglCol !== undefined ? (data[i][tglCol] || "").toString() : "",
               jenis_kelamin: jkCol !== undefined ? (data[i][jkCol] || "pria").toString() : "pria",
               status_jamaah: statusCol !== undefined ? (data[i][statusCol] || "Umum").toString() : "Umum",
+              status_pegawai: spCol !== undefined ? (data[i][spCol] || "").toString() : "",
+              company_id: compCol !== undefined ? (data[i][compCol] || "").toString() : "",
+              unit_id: unitCol !== undefined ? (data[i][unitCol] || "").toString() : "",
               total_poin: Number(data[i][poinCol]) || 0,
               role: userRole,
               created_at: createdAt
@@ -800,6 +841,56 @@ function handleRouting(action, params) {
     return jsonResponse({ success: true, data: history });
   }
   
+  // 5.5 GET COMPANIES
+  if (action === "getCompanies") {
+    const sheet = ss.getSheetByName("company");
+    if (!sheet) {
+      return jsonResponse({ success: true, data: [] });
+    }
+    const headerMap = getHeaderMap(sheet);
+    const rows = sheet.getDataRange().getValues();
+    const companies = [];
+    
+    const idIdx = headerMap["company_id"] !== undefined ? headerMap["company_id"] : 0;
+    const nameIdx = headerMap["company_name"] !== undefined ? headerMap["company_name"] : 1;
+    
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][idIdx]) {
+        companies.push({
+          company_id: rows[i][idIdx],
+          company_name: rows[i][nameIdx],
+        });
+      }
+    }
+    return jsonResponse({ success: true, data: companies });
+  }
+
+  // 5.6 GET UNITS
+  if (action === "getUnits") {
+    const sheet = ss.getSheetByName("unit");
+    if (!sheet) {
+      return jsonResponse({ success: true, data: [] });
+    }
+    const headerMap = getHeaderMap(sheet);
+    const rows = sheet.getDataRange().getValues();
+    const units = [];
+    
+    const idIdx = headerMap["unit_id"] !== undefined ? headerMap["unit_id"] : 0;
+    const compIdx = headerMap["company_id"] !== undefined ? headerMap["company_id"] : 1;
+    const nameIdx = headerMap["unit_name"] !== undefined ? headerMap["unit_name"] : 2;
+    
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][idIdx]) {
+        units.push({
+          unit_id: rows[i][idIdx],
+          company_id: rows[i][compIdx],
+          unit_name: rows[i][nameIdx],
+        });
+      }
+    }
+    return jsonResponse({ success: true, data: units });
+  }
+
   // 6. GET EVENTS (Admin & Home preview)
   if (action === "getEvents") {
     const sheetEvents = ss.getSheetByName("master_event");

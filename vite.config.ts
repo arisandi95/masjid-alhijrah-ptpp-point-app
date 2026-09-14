@@ -122,5 +122,8 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    define: {
+      'import.meta.env.GAS_URL': JSON.stringify(process.env.GAS_URL || ''),
+    },
   };
 });

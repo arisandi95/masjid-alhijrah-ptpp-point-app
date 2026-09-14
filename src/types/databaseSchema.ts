@@ -22,6 +22,8 @@ export type JenisKelamin = 'pria' | 'wanita';
 
 export type StatusJamaah = 'Pegawai/PTPP' | 'Keluarga Pegawai' | 'Mitra/Vendor' | 'Umum';
 
+export type StatusPegawai = 'Organik' | 'Non Organik';
+
 export type UserRole = 'user' | 'admin';
 
 export type EventType = 'append' | 'redeem';
@@ -31,6 +33,17 @@ export type EventStatus = 'active' | 'inactive';
 // ----------------------------------------------------------------------------
 // 2. INTERFACE MODEL DATA (TYPESCRIPT)
 // ----------------------------------------------------------------------------
+
+export interface Company {
+  company_id: string;
+  company_name: string;
+}
+
+export interface Unit {
+  unit_id: string;
+  company_id: string;
+  unit_name: string;
+}
 
 /**
  * Tabel: `users`
@@ -43,7 +56,10 @@ export interface User {
   email?: string;           // Alamat email aktif (opsional)
   tanggal_lahir?: string;   // Tanggal lahir jamaah (format: YYYY-MM-DD, opsional)
   jenis_kelamin?: JenisKelamin; // 'pria' | 'wanita'
-  status_jamaah?: StatusJamaah; // 'Pegawai/PTPP' | 'Keluarga Pegawai' | 'Mitra/Vendor' | 'Umum'
+  status_jamaah?: StatusJamaah; // 'Pegawai/PTPP' | 'Keluarga Pegawai' | 'Mitra/Vendor' | 'Umum' (Hidden in UI)
+  status_pegawai?: StatusPegawai; // 'Organik' | 'Non Organik'
+  company_id?: string;      // Relasi ke tabel Company
+  unit_id?: string;         // Relasi ke tabel Unit
   pin?: string;             // 6 digit PIN untuk keamanan login cepat
   total_poin: number;       // Saldo total poin jamaah saat ini (default: 0)
   role: UserRole;           // 'user' (jamaah biasa) | 'admin' (pengurus DKM)
@@ -159,6 +175,9 @@ export const USERS_TABLE_HEADERS = [
   'tanggal_lahir',
   'jenis_kelamin',
   'status_jamaah',
+  'status_pegawai',
+  'company_id',
+  'unit_id',
   'pin',
   'total_poin',
   'role',
@@ -246,6 +265,9 @@ export const USERS_SCHEMA: TableStructureMeta = {
     { field: 'tanggal_lahir', header: 'tanggal_lahir', type: 'date', required: false, description: 'Tanggal lahir jamaah (YYYY-MM-DD)', example: '1992-08-17' },
     { field: 'jenis_kelamin', header: 'jenis_kelamin', type: 'enum', required: false, description: 'Jenis kelamin jamaah', example: 'pria', options: ['pria', 'wanita'] },
     { field: 'status_jamaah', header: 'status_jamaah', type: 'enum', required: false, description: 'Klasifikasi jamaah di lingkungan PT PP', example: 'Pegawai/PTPP', options: ['Pegawai/PTPP', 'Keluarga Pegawai', 'Mitra/Vendor', 'Umum'] },
+    { field: 'status_pegawai', header: 'status_pegawai', type: 'enum', required: false, description: 'Status kepegawaian (Organik/Non Organik)', example: 'Organik', options: ['Organik', 'Non Organik'] },
+    { field: 'company_id', header: 'company_id', type: 'string', required: false, description: 'ID Perusahaan', example: 'COMP_01' },
+    { field: 'unit_id', header: 'unit_id', type: 'string', required: false, description: 'ID Unit', example: 'UNIT_01' },
     { field: 'pin', header: 'pin', type: 'string', required: false, description: '6 Digit PIN keamanan untuk login', example: '123456' },
     { field: 'total_poin', header: 'total_poin', type: 'number', required: true, description: 'Total akumulasi saldo poin jamaah saat ini', example: 75 },
     { field: 'role', header: 'role', type: 'enum', required: true, description: 'Peran pengguna (user biasa atau admin pengurus DKM)', example: 'user', options: ['user', 'admin'] },
@@ -326,6 +348,39 @@ export const PENILAIAN_ACARA_SCHEMA: TableStructureMeta = {
 };
 
 /**
+ * Metadata Lengkap Tabel 5: `company`
+ */
+export const COMPANY_SCHEMA: TableStructureMeta = {
+  tableName: 'company',
+  sheetName: 'company',
+  displayName: 'Tabel Master Perusahaan',
+  description: 'Menyimpan daftar nama-nama perusahaan.',
+  primaryKey: 'company_id',
+  headers: ['company_id', 'company_name'] as any,
+  columns: [
+    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'ID unik perusahaan (Primary Key)', example: 'COMP_01' },
+    { field: 'company_name', header: 'company_name', type: 'string', required: true, description: 'Nama Perusahaan', example: 'PT PP (Persero) Tbk' },
+  ],
+};
+
+/**
+ * Metadata Lengkap Tabel 6: `unit`
+ */
+export const UNIT_SCHEMA: TableStructureMeta = {
+  tableName: 'unit',
+  sheetName: 'unit',
+  displayName: 'Tabel Master Unit/Divisi',
+  description: 'Menyimpan daftar unit atau divisi, dan merujuk ke tabel perusahaan.',
+  primaryKey: 'unit_id',
+  headers: ['unit_id', 'company_id', 'unit_name'] as any,
+  columns: [
+    { field: 'unit_id', header: 'unit_id', type: 'string', required: true, description: 'ID unik unit/divisi (Primary Key)', example: 'UNIT_01' },
+    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'Foreign Key merujuk ke company', example: 'COMP_01' },
+    { field: 'unit_name', header: 'unit_name', type: 'string', required: true, description: 'Nama Unit/Divisi', example: 'Divisi Gedung 1' },
+  ],
+};
+
+/**
  * Daftar Seluruh Skema Tabel (Dictionary & Array)
  */
 export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
@@ -333,6 +388,8 @@ export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
   MASTER_EVENT_SCHEMA,
   SCAN_LOG_SCHEMA,
   PENILAIAN_ACARA_SCHEMA,
+  COMPANY_SCHEMA,
+  UNIT_SCHEMA,
 ];
 
 export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
@@ -340,4 +397,6 @@ export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
   master_event: MASTER_EVENT_SCHEMA,
   scan_log: SCAN_LOG_SCHEMA,
   penilaian_acara: PENILAIAN_ACARA_SCHEMA,
+  company: COMPANY_SCHEMA,
+  unit: UNIT_SCHEMA,
 };

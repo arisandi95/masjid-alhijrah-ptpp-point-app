@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { User, Phone, Mail, Calendar, Briefcase, ChevronDown, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Phone, Mail, Calendar, Briefcase, ChevronDown, Eye, EyeOff, AlertCircle, ArrowRight, Building2, Layers } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { JenisKelamin, StatusJamaah } from '../types';
+import { JenisKelamin, StatusJamaah, Company, Unit, StatusPegawai } from '../types';
+import { api } from '../services/api';
 
 interface RegisterPageProps {
   onGoToLogin: () => void;
@@ -14,12 +15,52 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
   const [email, setEmail] = useState('');
   const [tanggalLahir, setTanggalLahir] = useState('');
   const [jenisKelamin, setJenisKelamin] = useState<JenisKelamin>('pria');
-  const [statusJamaah, setStatusJamaah] = useState<StatusJamaah>('Pegawai/PTPP');
+  const [statusPegawai, setStatusPegawai] = useState<StatusPegawai>('Organik');
+  const [companyId, setCompanyId] = useState('');
+  const [unitId, setUnitId] = useState('');
   const [pin, setPin] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [filteredUnits, setFilteredUnits] = useState<Unit[]>([]);
+
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      const [compRes, unitRes] = await Promise.all([
+        api.getCompanies(),
+        api.getUnits(),
+      ]);
+      if (compRes.success && compRes.data) {
+        setCompanies(compRes.data);
+        if (compRes.data.length > 0) {
+          setCompanyId(compRes.data[0].company_id);
+        }
+      }
+      if (unitRes.success && unitRes.data) {
+        setUnits(unitRes.data);
+      }
+    };
+    fetchMasterData();
+  }, []);
+
+  useEffect(() => {
+    if (companyId) {
+      const matchingUnits = units.filter(u => u.company_id === companyId);
+      setFilteredUnits(matchingUnits);
+      if (matchingUnits.length > 0) {
+        setUnitId(matchingUnits[0].unit_id);
+      } else {
+        setUnitId('');
+      }
+    } else {
+      setFilteredUnits([]);
+      setUnitId('');
+    }
+  }, [companyId, units]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +81,14 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
       setErrorMsg('Konfirmasi PIN tidak cocok');
       return;
     }
+    if (!companyId) {
+      setErrorMsg('Pilih perusahaan tempat Anda bekerja');
+      return;
+    }
+    if (!unitId) {
+      setErrorMsg('Pilih unit/divisi tempat Anda bekerja');
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
@@ -49,7 +98,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
         email: email.trim() || undefined,
         tanggal_lahir: tanggalLahir || undefined,
         jenis_kelamin: jenisKelamin,
-        status_jamaah: statusJamaah,
+        status_jamaah: 'Pegawai/PTPP',
+        status_pegawai: statusPegawai,
+        company_id: companyId,
+        unit_id: unitId,
       });
       if (!res.success) {
         setErrorMsg(res.error || 'Pendaftaran gagal');
@@ -204,28 +256,80 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
             </div>
           </div>
 
-          {/* Status Jamaah Dropdown */}
+          {/* Status Pegawai Dropdown */}
           <div>
             <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
-              Status Jamaah <span className="text-red-500">*</span>
+              Status Pegawai <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
                 <Briefcase className="w-4 h-4" />
               </div>
               <select
-                value={statusJamaah}
-                onChange={(e) => setStatusJamaah(e.target.value as StatusJamaah)}
+                value={statusPegawai}
+                onChange={(e) => setStatusPegawai(e.target.value as StatusPegawai)}
                 className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24]"
                 required
               >
-                <option value="Pegawai/PTPP">Pegawai/PTPP</option>
-                <option value="Keluarga Pegawai">Keluarga Pegawai</option>
-                <option value="Mitra/Vendor">Mitra/Vendor</option>
-                <option value="Umum">Umum</option>
+                <option value="Organik">Organik</option>
+                <option value="Non Organik">Non Organik</option>
               </select>
               <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#6B7568]">
                 <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+
+          {/* Company & Unit (Master Data) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
+                Perusahaan <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <select
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24]"
+                  required
+                >
+                  <option value="" disabled>Pilih Perusahaan...</option>
+                  {companies.map((c) => (
+                    <option key={c.company_id} value={c.company_id}>{c.company_name}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
+                Unit / Divisi <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <select
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24] disabled:opacity-60 disabled:cursor-not-allowed"
+                  required
+                  disabled={!companyId || filteredUnits.length === 0}
+                >
+                  <option value="" disabled>Pilih Unit...</option>
+                  {filteredUnits.map((u) => (
+                    <option key={u.unit_id} value={u.unit_id}>{u.unit_name}</option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
               </div>
             </div>
           </div>

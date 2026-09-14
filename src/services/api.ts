@@ -1,4 +1,4 @@
-import { ApiResponse, EventReview, EventReviewInput, JenisKelamin, MasterEvent, ScanLog, ScanResult, StatusJamaah, User } from '../types';
+import { ApiResponse, EventReview, EventReviewInput, JenisKelamin, MasterEvent, ScanLog, ScanResult, StatusJamaah, User, Company, Unit } from '../types';
 import {
   DEFAULT_USERS,
   getGasUrl,
@@ -116,6 +116,9 @@ export const api = {
       tanggal_lahir?: string;
       jenis_kelamin?: JenisKelamin;
       status_jamaah?: StatusJamaah;
+      status_pegawai?: string;
+      company_id?: string;
+      unit_id?: string;
     }
   ): Promise<ApiResponse<User>> {
     const formattedPhone = formatPhoneNumber(no_hp);
@@ -124,6 +127,9 @@ export const api = {
     const tanggal_lahir = details?.tanggal_lahir?.trim() || '';
     const jenis_kelamin = details?.jenis_kelamin || 'pria';
     const status_jamaah = details?.status_jamaah || 'Umum';
+    const status_pegawai = details?.status_pegawai;
+    const company_id = details?.company_id;
+    const unit_id = details?.unit_id;
 
     // Try Google Apps Script if URL is configured
     if (getGasUrl()) {
@@ -136,6 +142,9 @@ export const api = {
           tanggal_lahir,
           jenis_kelamin,
           status_jamaah,
+          status_pegawai,
+          company_id,
+          unit_id,
           role,
         });
         return gasResult;
@@ -166,6 +175,9 @@ export const api = {
       tanggal_lahir,
       jenis_kelamin,
       status_jamaah,
+      status_pegawai: status_pegawai as any,
+      company_id,
+      unit_id,
       pin: cleanPin, // PIN disimpan tanpa enkripsi
       total_poin: 0,
       role: role,
@@ -573,6 +585,37 @@ export const api = {
     enrichedLogs.sort((a, b) => new Date(b.scanned_at).getTime() - new Date(a.scanned_at).getTime());
 
     return { success: true, data: enrichedLogs };
+  },
+
+  // 5.5 GET COMPANIES & UNITS
+  async getCompanies(): Promise<ApiResponse<Company[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<Company[]>('getCompanies');
+        return res;
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') {
+          console.warn('GAS companies error:', e);
+        }
+      }
+    }
+    const { getLocalCompanies } = await import('./mockStorage');
+    return { success: true, data: getLocalCompanies() };
+  },
+
+  async getUnits(): Promise<ApiResponse<Unit[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<Unit[]>('getUnits');
+        return res;
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') {
+          console.warn('GAS units error:', e);
+        }
+      }
+    }
+    const { getLocalUnits } = await import('./mockStorage');
+    return { success: true, data: getLocalUnits() };
   },
 
   // 6. GET EVENTS

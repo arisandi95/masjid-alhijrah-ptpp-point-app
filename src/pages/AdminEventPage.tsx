@@ -69,6 +69,7 @@ export const AdminEventPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Google Sheets Config State
+  const isGasUrlEnvLocked = !!(import.meta.env.VITE_GAS_URL || import.meta.env.GAS_URL);
   const [gasUrlInput, setGasUrlInput] = useState(getGasUrl());
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -952,13 +953,16 @@ export const AdminEventPage: React.FC = () => {
                 type="url"
                 value={gasUrlInput}
                 onChange={(e) => setGasUrlInput(e.target.value)}
+                disabled={isGasUrlEnvLocked}
                 placeholder="https://script.google.com/macros/s/.../exec"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] bg-[#FAFAF7]"
+                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] bg-[#FAFAF7] disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <span className="text-[10px] text-[#6B7568] mt-1 block">
-                {gasUrlInput
-                  ? 'Mode Terhubung: Permintaan API akan diarahkan ke Google Sheets Anda.'
-                  : 'Mode Standby / Offline: Saat ini data disimpan di penyimpanan lokal browser.'}
+                {isGasUrlEnvLocked 
+                  ? '🔒 URL Google Sheets dikonfigurasi melalui Environment Variable pada Vercel. Seluruh perangkat otomatis terhubung ke URL ini.'
+                  : gasUrlInput
+                    ? 'Mode Terhubung: Permintaan API akan diarahkan ke Google Sheets Anda.'
+                    : 'Mode Standby / Offline: Saat ini data disimpan di penyimpanan lokal browser.'}
               </span>
             </div>
 
@@ -977,13 +981,15 @@ export const AdminEventPage: React.FC = () => {
                 <span>Tes Koneksi</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleSaveGasUrl}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold hover:bg-[#094A34] transition"
-              >
-                Simpan URL
-              </button>
+              {!isGasUrlEnvLocked && (
+                <button
+                  type="button"
+                  onClick={handleSaveGasUrl}
+                  className="flex-1 py-2 px-3 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold hover:bg-[#094A34] transition"
+                >
+                  Simpan URL
+                </button>
+              )}
             </div>
 
             {testResult && (
