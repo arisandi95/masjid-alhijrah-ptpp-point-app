@@ -243,109 +243,202 @@ export const AdminEventPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tabs Navigation (Responsive 2x2 on Mobile, 4 Cols on Desktop - Spaced & Clean) */}
-      <div className="bg-white rounded-2xl p-2 border border-gray-200/80 shadow-2xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {/* Tabs Navigation (Spacious, Modern Dashboard Cards - 2x2 on Mobile, 4 Cols on Desktop) */}
+      <div className="bg-[#F8FAF8] p-2.5 sm:p-3 rounded-2xl border border-gray-200/85 shadow-2xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {/* Tab 1: Kajian & QR */}
           <button
             type="button"
             onClick={() => setActiveTab('events')}
-            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition cursor-pointer ${
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
               activeTab === 'events'
-                ? 'bg-[#0F6B4C] text-white shadow-xs font-semibold'
-                : 'bg-[#FAFAF7] text-[#4A554A] hover:bg-[#E8F3EE] hover:text-[#0F6B4C] border border-gray-100'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
             }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Calendar className={`w-4 h-4 shrink-0 ${activeTab === 'events' ? 'text-[#FAF3D1]' : 'text-[#0F6B4C]'}`} />
-              <span className="font-medium truncate">Kajian & QR</span>
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'events'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-emerald-50 text-[#0F6B4C] group-hover:bg-emerald-100/80'
+                }`}
+              >
+                <Calendar className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  activeTab === 'events'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-[#4A5568] group-hover:bg-[#E8F3EE] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                {events.length}
+              </span>
             </div>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                activeTab === 'events'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-gray-200/80 text-gray-700'
-              }`}
-            >
-              {events.length}
-            </span>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'events' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Kajian & QR
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'events' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Agenda & Barcode
+              </span>
+            </div>
           </button>
 
           {/* Tab 2: Penilaian Acara */}
           <button
             type="button"
             onClick={() => setActiveTab('penilaian')}
-            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition cursor-pointer ${
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
               activeTab === 'penilaian'
-                ? 'bg-[#0F6B4C] text-white shadow-xs font-semibold'
-                : 'bg-[#FAFAF7] text-[#4A554A] hover:bg-[#E8F3EE] hover:text-[#0F6B4C] border border-gray-100'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
             }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <MessageSquareHeart className={`w-4 h-4 shrink-0 ${activeTab === 'penilaian' ? 'text-[#FAF3D1]' : 'text-[#0F6B4C]'}`} />
-              <span className="font-medium truncate">Penilaian</span>
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'penilaian'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-emerald-50 text-[#0F6B4C] group-hover:bg-emerald-100/80'
+                }`}
+              >
+                <MessageSquareHeart className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  activeTab === 'penilaian'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-[#4A5568] group-hover:bg-[#E8F3EE] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                {reviews.length}
+              </span>
             </div>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                activeTab === 'penilaian'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-gray-200/80 text-gray-700'
-              }`}
-            >
-              {reviews.length}
-            </span>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'penilaian' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Penilaian
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'penilaian' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Feedback Jamaah
+              </span>
+            </div>
           </button>
 
           {/* Tab 3: Rekap Jamaah */}
           <button
             type="button"
             onClick={() => setActiveTab('rekap')}
-            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition cursor-pointer ${
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
               activeTab === 'rekap'
-                ? 'bg-[#0F6B4C] text-white shadow-xs font-semibold'
-                : 'bg-[#FAFAF7] text-[#4A554A] hover:bg-[#E8F3EE] hover:text-[#0F6B4C] border border-gray-100'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
             }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Users className={`w-4 h-4 shrink-0 ${activeTab === 'rekap' ? 'text-[#FAF3D1]' : 'text-[#0F6B4C]'}`} />
-              <span className="font-medium truncate">Rekap Jamaah</span>
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'rekap'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-emerald-50 text-[#0F6B4C] group-hover:bg-emerald-100/80'
+                }`}
+              >
+                <Users className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  activeTab === 'rekap'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-[#4A5568] group-hover:bg-[#E8F3EE] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                {leaderboard.length}
+              </span>
             </div>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                activeTab === 'rekap'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-gray-200/80 text-gray-700'
-              }`}
-            >
-              {leaderboard.length}
-            </span>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'rekap' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Rekap Jamaah
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'rekap' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Poin & Presensi
+              </span>
+            </div>
           </button>
 
           {/* Tab 4: Google Sheets */}
           <button
             type="button"
             onClick={() => setActiveTab('sheets')}
-            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition cursor-pointer ${
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
               activeTab === 'sheets'
-                ? 'bg-[#0F6B4C] text-white shadow-xs font-semibold'
-                : 'bg-[#FAFAF7] text-[#4A554A] hover:bg-[#E8F3EE] hover:text-[#0F6B4C] border border-gray-100'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
             }`}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Database className={`w-4 h-4 shrink-0 ${activeTab === 'sheets' ? 'text-[#FAF3D1]' : 'text-[#0F6B4C]'}`} />
-              <span className="font-medium truncate">Google Sheets</span>
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'sheets'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-emerald-50 text-[#0F6B4C] group-hover:bg-emerald-100/80'
+                }`}
+              >
+                <Database className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 ${
+                  activeTab === 'sheets'
+                    ? 'bg-white/20 text-white'
+                    : gasUrlInput
+                    ? 'bg-emerald-100/80 text-emerald-800'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'sheets' ? 'bg-[#FAF3D1]' : gasUrlInput ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                {gasUrlInput ? 'Online' : 'Lokal'}
+              </span>
             </div>
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold shrink-0 ${
-                activeTab === 'sheets'
-                  ? 'bg-white/20 text-white'
-                  : gasUrlInput
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-gray-200/80 text-gray-600'
-              }`}
-            >
-              {gasUrlInput ? 'Online' : 'Local'}
-            </span>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'sheets' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Google Sheets
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'sheets' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Integrasi & Skema
+              </span>
+            </div>
           </button>
         </div>
       </div>
@@ -938,7 +1031,7 @@ export const AdminEventPage: React.FC = () => {
               <p>• <strong>Who has access:</strong> "Anyone" (Siapa saja)</p>
               <p>• Script otomatis membuat / mengelola 4 sheet:
                 <br />&nbsp;&nbsp;1. <code>users</code>: [user_id, nama, no_hp, <strong>email</strong>, <strong>tanggal_lahir</strong>, <strong>jenis_kelamin</strong>, <strong>status_jamaah</strong>, <strong>pin</strong>, total_poin, <strong>role</strong>, created_at]
-                <br />&nbsp;&nbsp;2. <code>master_event</code>: [event_id, nama_event, tanggal, qr_token, poin_value, status, <strong>pemateri</strong>, <strong>waktu</strong>, <strong>lokasi</strong>, <strong>event_type</strong>, created_at]
+                <br />&nbsp;&nbsp;2. <code>master_event</code>: [event_id, nama_event, tanggal, qr_token, poin_value, status, <strong>pemateri</strong>, <strong>waktu</strong>, <strong>lokasi</strong>, <strong>event_type</strong>, <strong>kuota</strong>, created_at]
                 <br />&nbsp;&nbsp;3. <code>scan_log</code>: [log_id, user_id, event_id, poin_didapat, scanned_at]
                 <br />&nbsp;&nbsp;4. <code>penilaian_acara</code>: [review_id, user_id, event_id, nama_jamaah, nama_event, skor_materi, skor_kenyamanan, skor_sound, skor_panitia, kesan_terbaik, hal_kurang, usulan_kegiatan, submitted_at]
               </p>

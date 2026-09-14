@@ -7,7 +7,7 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * Absensi & Poin Kajian via QR Code
  * 
  * Petunjuk Deploy:
- * 1. Buka spreadsheet Google Sheets dengan 3 Sheet: "users", "master_event", "scan_log"
+ * 1. Buka spreadsheet Google Sheets (script otomatis menyiapkan 4 sheet: "users", "master_event", "scan_log", dan "penilaian_acara")
  * 2. Menu Extensions -> Apps Script
  * 3. Hapus kode bawaan, paste seluruh kode ini
  * 4. Klik "Deploy" -> "New deployment"
@@ -73,7 +73,7 @@ function setupSheets() {
     sheetEvent = ss.insertSheet("master_event");
     sheetEvent.appendRow(["event_id", "nama_event", "tanggal", "qr_token", "poin_value", "status", "pemateri", "waktu", "lokasi", "event_type", "kuota", "created_at"]);
   } else {
-    // Auto-migrate master_event headers jika kolom belum ada
+    // Auto-migrate master_event headers jika kolom pemateri, waktu, lokasi, event_type, atau kuota belum ada
     const lastCol = sheetEvent.getLastColumn() || 1;
     const headers = sheetEvent.getRange(1, 1, 1, lastCol).getValues()[0];
     const headerLower = headers.map(h => (h || "").toString().toLowerCase().trim());
