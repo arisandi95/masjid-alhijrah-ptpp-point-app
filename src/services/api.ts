@@ -333,7 +333,11 @@ export const api = {
              data: gasResult.data?.event || gasResult.data,
            };
         }
-        return gasResult;
+        return {
+          ...gasResult,
+          error: gasResult.error || gasResult.message || 'Gagal memeriksa QR Code.',
+          kuota_penuh: (gasResult as any).kuota_penuh || false,
+        };
       } catch (e: any) {
         if (e.message !== 'NO_GAS_URL') {
           return {
@@ -387,6 +391,18 @@ export const api = {
       };
     }
 
+    // Validasi kuota penukaran untuk item redeem
+    if (isRedeem && event.kuota && event.kuota > 0) {
+      const claimedCount = logs.filter((l) => l.event_id === event.event_id).length;
+      if (claimedCount >= event.kuota) {
+        return {
+          success: false,
+          error: `Mohon maaf, kuota penukaran untuk "${event.nama_event}" telah habis (${event.kuota} kuota terpenuhi).`,
+          data: event,
+        };
+      }
+    }
+
     return {
       success: true,
       data: event,
@@ -411,6 +427,8 @@ export const api = {
             success: false,
             message: gasResult.error || 'Gagal memproses absensi.',
             already_scanned: (gasResult as any).already_scanned || false,
+            kuota_penuh: (gasResult as any).kuota_penuh || false,
+            event: (gasResult as any).event || (gasResult as any).data?.event,
           };
         }
 
@@ -512,25 +530,41 @@ export const api = {
       saveLocalReviews(reviews);
     }
 
-    // CEK KUOTA KAJIAN:
-    // Dilakukan setelah pengisian form evaluasi acara
+    // CEK KUOTA (Kajian maupun Redeem):
     let isQuotaFull = false;
     let sisaKuota: number | undefined = undefined;
 
-    if (!isRedeem && event.kuota && event.kuota > 0) {
-      // Hitung berapa jamaah yang sudah mendapatkan poin pada kajian ini
-      const claimedCount = logs.filter(
-        (l) => l.event_id === event.event_id && (l.poin_didapat || 0) > 0
-      ).length;
+    // Hitung berapa kali event ini sudah diklaim / ditukarkan
+    const claimedCount = logs.filter((l) => {
+      if (l.event_id !== event.event_id) return false;
+      if (isRedeem) return true; // Untuk redeem, setiap kali ditukarkan dihitung
+      return (l.poin_didapat || 0) > 0; // Untuk kajian, hanya yang memperoleh poin dihitung
+    }).length;
 
-      if (claimedCount >= event.kuota) {
-        isQuotaFull = true;
+    // JIKA REDEEM & KUOTA HABIS: TOLAK TRANSAKSI (POIN TIDAK BOLEH BERKURANG)
+    if (isRedeem && event.kuota && event.kuota > 0 && claimedCount >= event.kuota) {
+      return {
+        success: false,
+        kuota_penuh: true,
+        message: `Mohon maaf, kuota penukaran untuk "${event.nama_event}" telah habis (${event.kuota} kuota terpenuhi). Poin Anda tidak dipotong.`,
+        event,
+        event_type: 'redeem',
+      };
+    }
+
+    if (event.kuota && event.kuota > 0) {
+      if (!isRedeem) {
+        if (claimedCount >= event.kuota) {
+          isQuotaFull = true;
+        } else {
+          sisaKuota = event.kuota - (claimedCount + 1);
+        }
       } else {
         sisaKuota = event.kuota - (claimedCount + 1);
       }
     }
 
-    // Jika kuota sudah penuh, user tidak dapat poin (deltaPoin = 0)
+    // Jika kuota kajian sudah penuh, user tidak dapat poin (deltaPoin = 0)
     const deltaPoin = isRedeem ? -event.poin_value : isQuotaFull ? 0 : event.poin_value;
     const updatedTotal = Math.max(0, currentPoin + deltaPoin);
 
@@ -560,7 +594,7 @@ export const api = {
     }
 
     const message = isRedeem
-      ? `Penukaran berhasil! ${event.poin_value} poin telah ditukarkan untuk "${event.nama_event}". Sisa poin Anda: ${updatedTotal} poin.`
+      ? `Penukaran berhasil! ${event.poin_value} poin telah ditukarkan untuk "${event.nama_event}". Sisa poin Anda: ${updatedTotal} poin.${sisaKuota !== undefined ? ` (Sisa kuota: ${sisaKuota} voucher/item)` : ''}`
       : isQuotaFull
       ? `Evaluasi acara berhasil tersimpan! Namun, mohon maaf kuota perolehan poin untuk kajian "${event.nama_event}" telah penuh (${event.kuota} jamaah), sehingga Anda tidak memperoleh tambahan poin. Jazakallahu khairan atas partisipasi & ulasan Anda.`
       : `Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +${event.poin_value} poin!${sisaKuota !== undefined ? ` (Sisa kuota: ${sisaKuota} jamaah)` : ''}`;

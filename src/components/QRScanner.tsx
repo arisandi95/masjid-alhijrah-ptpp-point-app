@@ -178,6 +178,7 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
         setScanResult({
           success: false,
           already_scanned: (check as any).already_scanned || false,
+          kuota_penuh: (check as any).kuota_penuh || false,
           message: check.error || 'QR Code tidak valid atau Anda sudah absen.',
           event: check.data,
         });
@@ -448,6 +449,8 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
                     className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 ${
                       scanResult.already_scanned
                         ? 'bg-amber-100 text-amber-700'
+                        : scanResult.kuota_penuh || (scanResult.message || '').toLowerCase().includes('kuota')
+                        ? 'bg-rose-100 text-rose-700'
                         : isInsufficientPoints
                         ? 'bg-rose-100 text-rose-600'
                         : 'bg-red-100 text-[#C0392B]'
@@ -458,6 +461,8 @@ export const QRScanner: React.FC<QRScannerProps> = ({ onSuccessScan, onClose }) 
                   <h3 className="text-base font-bold text-[#1F2A24] font-heading">
                     {scanResult.already_scanned
                       ? 'Sudah Absen / Ditukarkan'
+                      : scanResult.kuota_penuh || (scanResult.message || '').toLowerCase().includes('kuota')
+                      ? 'Kuota Penukaran Habis'
                       : isInsufficientPoints
                       ? 'Poin Tidak Mencukupi'
                       : 'Scan Tidak Berhasil'}

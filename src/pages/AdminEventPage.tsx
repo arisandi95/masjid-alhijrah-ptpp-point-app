@@ -517,7 +517,7 @@ export const AdminEventPage: React.FC = () => {
                     {events.map((ev) => {
                       const isRedeem = ev.event_type === 'redeem';
                       const claimed = allLogs.filter(
-                        (l) => l.event_id === ev.event_id && (l.poin_didapat || 0) > 0
+                        (l) => l.event_id === ev.event_id && (isRedeem ? true : (l.poin_didapat || 0) > 0)
                       ).length;
                       const isFull = ev.kuota ? claimed >= ev.kuota : false;
 
@@ -655,8 +655,9 @@ export const AdminEventPage: React.FC = () => {
                             </span>
                           )}
                           {ev.kuota ? (() => {
+                            const isRedeem = ev.event_type === 'redeem';
                             const claimed = allLogs.filter(
-                              (l) => l.event_id === ev.event_id && (l.poin_didapat || 0) > 0
+                              (l) => l.event_id === ev.event_id && (isRedeem ? true : (l.poin_didapat || 0) > 0)
                             ).length;
                             const isFull = claimed >= ev.kuota;
                             return (

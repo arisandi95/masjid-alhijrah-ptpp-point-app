@@ -538,6 +538,27 @@ function handleRouting(action, params) {
           event: targetEvent
         });
       }
+
+      // Cek kuota jika ada batas kuota untuk item redeem
+      if (targetEvent.kuota && targetEvent.kuota > 0) {
+        const logHeaderMapVal = getHeaderMap(sheetLogs);
+        const logEvIdColVal = logHeaderMapVal["event_id"] !== undefined ? logHeaderMapVal["event_id"] : 2;
+        let claimedCount = 0;
+        for (let i = 1; i < logRows.length; i++) {
+          const logEvId = (logRows[i][logEvIdColVal] || "").toString().trim();
+          if (logEvId === targetEvent.event_id.toString().trim()) {
+            claimedCount++;
+          }
+        }
+        if (claimedCount >= targetEvent.kuota) {
+          return jsonResponse({
+            success: false,
+            kuota_penuh: true,
+            error: "Mohon maaf, kuota penukaran untuk item '" + targetEvent.nama_event + "' telah habis (Kuota: " + targetEvent.kuota + " telah terpenuhi).",
+            event: targetEvent
+          });
+        }
+      }
     }
 
     return jsonResponse({
@@ -669,23 +690,44 @@ function handleRouting(action, params) {
     
     let isQuotaFull = false;
     let sisaKuota = undefined;
+    let claimedCount = 0;
     
     // Gunakan header map untuk scan_log agar aman jika ada perubahan kolom
     const logHeaderMap = getHeaderMap(sheetLogs);
     const logEvIdCol = logHeaderMap["event_id"] !== undefined ? logHeaderMap["event_id"] : 2;
     const logPointCol = logHeaderMap["poin_didapat"] !== undefined ? logHeaderMap["poin_didapat"] : 3;
 
-    if (!isRedeem && targetEvent.kuota && targetEvent.kuota > 0) {
-      let claimedCount = 0;
+    if (targetEvent.kuota && targetEvent.kuota > 0) {
       for (let i = 1; i < logRows.length; i++) {
         const logEvId = (logRows[i][logEvIdCol] || "").toString().trim();
         const logPoint = Number(logRows[i][logPointCol]) || 0;
-        if (logEvId === targetEvent.event_id.toString().trim() && logPoint > 0) {
-          claimedCount++;
+        if (logEvId === targetEvent.event_id.toString().trim()) {
+          if (isRedeem) {
+            // Untuk redeem, semua transaksi penukaran dihitung
+            claimedCount++;
+          } else if (logPoint > 0) {
+            // Untuk kajian/append, hanya yang mendapat poin yang dihitung
+            claimedCount++;
+          }
         }
       }
-      if (claimedCount >= targetEvent.kuota) {
-        isQuotaFull = true;
+
+      // JIKA REDEEM & KUOTA HABIS: TOLAK TRANSAKSI (POIN TIDAK DIPOTONG)
+      if (isRedeem && claimedCount >= targetEvent.kuota) {
+        return jsonResponse({
+          success: false,
+          kuota_penuh: true,
+          error: "Mohon maaf, kuota penukaran untuk item '" + targetEvent.nama_event + "' telah habis (" + targetEvent.kuota + " kuota terpenuhi). Poin Anda tidak dipotong.",
+          event: targetEvent
+        });
+      }
+
+      if (!isRedeem) {
+        if (claimedCount >= targetEvent.kuota) {
+          isQuotaFull = true;
+        } else {
+          sisaKuota = targetEvent.kuota - (claimedCount + 1);
+        }
       } else {
         sisaKuota = targetEvent.kuota - (claimedCount + 1);
       }
@@ -755,7 +797,7 @@ function handleRouting(action, params) {
     }
     
     const successMsg = isRedeem
-      ? "Penukaran berhasil! " + targetEvent.poin_value + " poin telah dipotong untuk '" + targetEvent.nama_event + "'. Sisa poin Anda: " + newTotalPoin + " poin."
+      ? "Penukaran berhasil! " + targetEvent.poin_value + " poin telah dipotong untuk '" + targetEvent.nama_event + "'. Sisa poin Anda: " + newTotalPoin + " poin." + (sisaKuota !== undefined ? " (Sisa kuota: " + sisaKuota + " voucher/item)" : "")
       : isQuotaFull
       ? "Evaluasi acara berhasil tersimpan! Namun, mohon maaf kuota perolehan poin untuk kajian '" + targetEvent.nama_event + "' telah penuh (" + targetEvent.kuota + " jamaah), sehingga Anda tidak memperoleh tambahan poin."
       : "Alhamdulillah! Penilaian acara tersimpan dan Anda mendapatkan +" + targetEvent.poin_value + " poin!" + (sisaKuota !== undefined ? " (Sisa kuota: " + sisaKuota + " jamaah)" : "");

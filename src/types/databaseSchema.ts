@@ -161,6 +161,8 @@ export interface ApiResponse<T = any> {
   data?: T;
   message?: string;
   error?: string;
+  already_scanned?: boolean;
+  kuota_penuh?: boolean;
 }
 
 // ----------------------------------------------------------------------------
