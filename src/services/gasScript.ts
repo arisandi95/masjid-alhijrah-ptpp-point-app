@@ -124,18 +124,42 @@ function setupSheets() {
   }
 
   // 5. Sheet company
-  let sheetCompany = ss.getSheetByName("company");
+  let sheetCompany = getSheetCaseInsensitive(ss, "company");
   if (!sheetCompany) {
     sheetCompany = ss.insertSheet("company");
     sheetCompany.appendRow(["company_id", "company_name"]);
+    sheetCompany.appendRow(["COMP_1", "PT PP (Persero) Tbk"]);
+    sheetCompany.appendRow(["COMP_2", "PT PP Presisi Tbk"]);
+    sheetCompany.appendRow(["COMP_3", "PT PP Properti Tbk"]);
   }
 
   // 6. Sheet unit
-  let sheetUnit = ss.getSheetByName("unit");
+  let sheetUnit = getSheetCaseInsensitive(ss, "unit");
   if (!sheetUnit) {
     sheetUnit = ss.insertSheet("unit");
     sheetUnit.appendRow(["unit_id", "company_id", "unit_name"]);
+    sheetUnit.appendRow(["UNIT_1", "COMP_1", "Divisi Gedung 1"]);
+    sheetUnit.appendRow(["UNIT_2", "COMP_1", "Divisi Gedung 2"]);
+    sheetUnit.appendRow(["UNIT_3", "COMP_1", "Divisi Infrastruktur"]);
+    sheetUnit.appendRow(["UNIT_4", "COMP_2", "Divisi Alat Berat"]);
+    sheetUnit.appendRow(["UNIT_5", "COMP_3", "Divisi Residensial"]);
   }
+}
+
+// Helper mencari Sheet tanpa case sensitive & toleran spasi
+function getSheetCaseInsensitive(ss, name) {
+  if (!ss) return null;
+  let s = ss.getSheetByName(name);
+  if (s) return s;
+  const sheets = ss.getSheets();
+  const target = name.toLowerCase().trim();
+  for (let i = 0; i < sheets.length; i++) {
+    const sName = sheets[i].getName().toLowerCase().trim();
+    if (sName === target || sName === target + "s" || target === sName + "s") {
+      return sheets[i];
+    }
+  }
+  return null;
 }
 
 // Helper membaca map nama kolom ke indeks (0-based)
@@ -843,7 +867,7 @@ function handleRouting(action, params) {
   
   // 5.5 GET COMPANIES
   if (action === "getCompanies") {
-    const sheet = ss.getSheetByName("company");
+    const sheet = getSheetCaseInsensitive(ss, "company");
     if (!sheet) {
       return jsonResponse({ success: true, data: [] });
     }
@@ -851,14 +875,24 @@ function handleRouting(action, params) {
     const rows = sheet.getDataRange().getValues();
     const companies = [];
     
-    const idIdx = headerMap["company_id"] !== undefined ? headerMap["company_id"] : 0;
-    const nameIdx = headerMap["company_name"] !== undefined ? headerMap["company_name"] : 1;
+    let idIdx = headerMap["company_id"];
+    if (idIdx === undefined) idIdx = headerMap["id_company"];
+    if (idIdx === undefined) idIdx = headerMap["id"];
+    if (idIdx === undefined) idIdx = 0;
+
+    let nameIdx = headerMap["company_name"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama_perusahaan"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama_company"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama"];
+    if (nameIdx === undefined) nameIdx = 1;
     
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][idIdx]) {
+      const cId = (rows[i][idIdx] !== undefined ? rows[i][idIdx] : "").toString().trim();
+      const cName = (rows[i][nameIdx] !== undefined ? rows[i][nameIdx] : cId).toString().trim();
+      if (cId) {
         companies.push({
-          company_id: rows[i][idIdx],
-          company_name: rows[i][nameIdx],
+          company_id: cId,
+          company_name: cName || cId,
         });
       }
     }
@@ -867,7 +901,7 @@ function handleRouting(action, params) {
 
   // 5.6 GET UNITS
   if (action === "getUnits") {
-    const sheet = ss.getSheetByName("unit");
+    const sheet = getSheetCaseInsensitive(ss, "unit");
     if (!sheet) {
       return jsonResponse({ success: true, data: [] });
     }
@@ -875,16 +909,33 @@ function handleRouting(action, params) {
     const rows = sheet.getDataRange().getValues();
     const units = [];
     
-    const idIdx = headerMap["unit_id"] !== undefined ? headerMap["unit_id"] : 0;
-    const compIdx = headerMap["company_id"] !== undefined ? headerMap["company_id"] : 1;
-    const nameIdx = headerMap["unit_name"] !== undefined ? headerMap["unit_name"] : 2;
+    let idIdx = headerMap["unit_id"];
+    if (idIdx === undefined) idIdx = headerMap["id_unit"];
+    if (idIdx === undefined) idIdx = headerMap["id"];
+    if (idIdx === undefined) idIdx = 0;
+
+    let compIdx = headerMap["company_id"];
+    if (compIdx === undefined) compIdx = headerMap["id_company"];
+    if (compIdx === undefined) compIdx = headerMap["company"];
+    if (compIdx === undefined) compIdx = headerMap["perusahaan"];
+    if (compIdx === undefined) compIdx = 1;
+
+    let nameIdx = headerMap["unit_name"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama_unit"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama_divisi"];
+    if (nameIdx === undefined) nameIdx = headerMap["divisi"];
+    if (nameIdx === undefined) nameIdx = headerMap["nama"];
+    if (nameIdx === undefined) nameIdx = 2;
     
     for (let i = 1; i < rows.length; i++) {
-      if (rows[i][idIdx]) {
+      const uId = (rows[i][idIdx] !== undefined ? rows[i][idIdx] : "").toString().trim();
+      const cId = (compIdx !== undefined && rows[i][compIdx] !== undefined ? rows[i][compIdx] : "").toString().trim();
+      const uName = (nameIdx !== undefined && rows[i][nameIdx] !== undefined ? rows[i][nameIdx] : uId).toString().trim();
+      if (uId) {
         units.push({
-          unit_id: rows[i][idIdx],
-          company_id: rows[i][compIdx],
-          unit_name: rows[i][nameIdx],
+          unit_id: uId,
+          company_id: cId,
+          unit_name: uName || uId,
         });
       }
     }

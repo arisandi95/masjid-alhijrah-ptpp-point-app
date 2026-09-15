@@ -353,13 +353,13 @@ export const PENILAIAN_ACARA_SCHEMA: TableStructureMeta = {
 export const COMPANY_SCHEMA: TableStructureMeta = {
   tableName: 'company',
   sheetName: 'company',
-  displayName: 'Tabel Master Perusahaan',
-  description: 'Menyimpan daftar nama-nama perusahaan.',
+  displayName: 'Tabel Master Perusahaan (company)',
+  description: 'Menyimpan daftar perusahaan holding, anak perusahaan (AP), SBU, dan afiliasi.',
   primaryKey: 'company_id',
   headers: ['company_id', 'company_name'] as any,
   columns: [
-    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'ID unik perusahaan (Primary Key)', example: 'COMP_01' },
-    { field: 'company_name', header: 'company_name', type: 'string', required: true, description: 'Nama Perusahaan', example: 'PT PP (Persero) Tbk' },
+    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'ID unik perusahaan (Primary Key)', example: '1' },
+    { field: 'company_name', header: 'company_name', type: 'string', required: true, description: 'Nama Perusahaan', example: 'PP Holding' },
   ],
 };
 
@@ -369,14 +369,14 @@ export const COMPANY_SCHEMA: TableStructureMeta = {
 export const UNIT_SCHEMA: TableStructureMeta = {
   tableName: 'unit',
   sheetName: 'unit',
-  displayName: 'Tabel Master Unit/Divisi',
-  description: 'Menyimpan daftar unit atau divisi, dan merujuk ke tabel perusahaan.',
+  displayName: 'Tabel Master Unit/Divisi (unit)',
+  description: 'Menyimpan daftar unit kerja / divisi yang berelasi dengan tabel company via company_id.',
   primaryKey: 'unit_id',
   headers: ['unit_id', 'company_id', 'unit_name'] as any,
   columns: [
-    { field: 'unit_id', header: 'unit_id', type: 'string', required: true, description: 'ID unik unit/divisi (Primary Key)', example: 'UNIT_01' },
-    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'Foreign Key merujuk ke company', example: 'COMP_01' },
-    { field: 'unit_name', header: 'unit_name', type: 'string', required: true, description: 'Nama Unit/Divisi', example: 'Divisi Gedung 1' },
+    { field: 'unit_id', header: 'unit_id', type: 'string', required: true, description: 'ID unik unit/divisi (Primary Key)', example: '1' },
+    { field: 'company_id', header: 'company_id', type: 'string', required: true, description: 'Relasi ke company (Foreign Key merujuk ke company.company_id)', example: '1' },
+    { field: 'unit_name', header: 'unit_name', type: 'string', required: true, description: 'Nama Unit / Divisi', example: 'UKP' },
   ],
 };
 

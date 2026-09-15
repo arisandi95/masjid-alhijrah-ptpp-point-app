@@ -135,17 +135,45 @@ export const DEFAULT_USERS: User[] = [
 ];
 
 export const DEFAULT_COMPANIES = [
-  { company_id: 'COMP_1', company_name: 'PT PP (Persero) Tbk' },
-  { company_id: 'COMP_2', company_name: 'PT PP Presisi Tbk' },
-  { company_id: 'COMP_3', company_name: 'PT PP Properti Tbk' },
+  { company_id: '1', company_name: 'PP Holding' },
+  { company_id: '2', company_name: 'AP' },
+  { company_id: '3', company_name: 'SBU' },
+  { company_id: '4', company_name: 'AFILISASI' },
 ];
 
 export const DEFAULT_UNITS = [
-  { unit_id: 'UNIT_1', company_id: 'COMP_1', unit_name: 'Divisi Gedung 1' },
-  { unit_id: 'UNIT_2', company_id: 'COMP_1', unit_name: 'Divisi Gedung 2' },
-  { unit_id: 'UNIT_3', company_id: 'COMP_1', unit_name: 'Divisi Infrastruktur' },
-  { unit_id: 'UNIT_4', company_id: 'COMP_2', unit_name: 'Divisi Alat Berat' },
-  { unit_id: 'UNIT_5', company_id: 'COMP_3', unit_name: 'Divisi Residensial' },
+  // 1: PP Holding
+  { unit_id: '1', company_id: '1', unit_name: 'UKP' },
+  { unit_id: '2', company_id: '1', unit_name: 'Infra 1' },
+  { unit_id: '3', company_id: '1', unit_name: 'Infra 2' },
+  { unit_id: '4', company_id: '1', unit_name: 'Gedung' },
+  { unit_id: '5', company_id: '1', unit_name: 'EPC' },
+  // 2: AP
+  { unit_id: '6', company_id: '2', unit_name: 'PP Properti' },
+  { unit_id: '7', company_id: '2', unit_name: 'PP Presisi' },
+  { unit_id: '8', company_id: '2', unit_name: 'PP Urban' },
+  { unit_id: '9', company_id: '2', unit_name: 'PP Energi' },
+  { unit_id: '10', company_id: '2', unit_name: 'PP Colomadu' },
+  { unit_id: '11', company_id: '2', unit_name: 'PP Centurion' },
+  { unit_id: '12', company_id: '2', unit_name: 'PP Semarang Demak' },
+  { unit_id: '13', company_id: '2', unit_name: 'PP Banjaratma' },
+  // 3: SBU
+  { unit_id: '14', company_id: '3', unit_name: 'Menara Danareksa' },
+  // 4: AFILISASI
+  { unit_id: '15', company_id: '4', unit_name: 'PT Indonesia Ferry Properti' },
+  { unit_id: '16', company_id: '4', unit_name: 'PT Celebes Railway Indonesia' },
+  { unit_id: '17', company_id: '4', unit_name: 'PT Solo Citra Metro Plasma Power' },
+  { unit_id: '18', company_id: '4', unit_name: 'PT Wika Serang Panimbang' },
+  { unit_id: '19', company_id: '4', unit_name: 'PT Jasamarga Manado Bitung' },
+  { unit_id: '20', company_id: '4', unit_name: 'PT Karya Logistik Nusantara' },
+  { unit_id: '21', company_id: '4', unit_name: 'PT Prima Multi Terminal' },
+  { unit_id: '22', company_id: '4', unit_name: 'PT Jasamarga Balikpapan Samarinda' },
+  { unit_id: '23', company_id: '4', unit_name: 'PT Citra Wasspphutowa' },
+  { unit_id: '24', company_id: '4', unit_name: 'PT Jasamarga Akses Patimban' },
+  { unit_id: '25', company_id: '4', unit_name: 'PT Jasamarga Jogja Bawen' },
+  { unit_id: '26', company_id: '4', unit_name: 'PT Jasamarga Rest Area Batang' },
+  { unit_id: '27', company_id: '4', unit_name: 'PT Kawasan Industri Terpadu Batang' },
+  { unit_id: '28', company_id: '4', unit_name: 'PT PP Tirta Riau' },
 ];
 
 const DEFAULT_LOGS: ScanLog[] = [
@@ -167,7 +195,13 @@ export function getLocalCompanies(): any[] {
       localStorage.setItem(COMPANIES_KEY, JSON.stringify(DEFAULT_COMPANIES));
       return [...DEFAULT_COMPANIES];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Invalidate old dummy cache if exists
+    if (!Array.isArray(parsed) || parsed.length === 0 || parsed.some((c: any) => String(c.company_id).startsWith('COMP_'))) {
+      localStorage.setItem(COMPANIES_KEY, JSON.stringify(DEFAULT_COMPANIES));
+      return [...DEFAULT_COMPANIES];
+    }
+    return parsed;
   } catch {
     return [...DEFAULT_COMPANIES];
   }
@@ -180,7 +214,13 @@ export function getLocalUnits(): any[] {
       localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
       return [...DEFAULT_UNITS];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Invalidate old dummy cache if exists
+    if (!Array.isArray(parsed) || parsed.length === 0 || parsed.some((u: any) => String(u.unit_id).startsWith('UNIT_'))) {
+      localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
+      return [...DEFAULT_UNITS];
+    }
+    return parsed;
   } catch {
     return [...DEFAULT_UNITS];
   }

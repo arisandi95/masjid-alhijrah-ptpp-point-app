@@ -1241,6 +1241,21 @@ export const AdminEventPage: React.FC = () => {
                             {itemUser.status_jamaah}
                           </span>
                         )}
+                        {itemUser.status_pegawai && (
+                          <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-md bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                            {itemUser.status_pegawai}
+                          </span>
+                        )}
+                        {itemUser.company_id && (
+                          <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 shrink-0" title={`Perusahaan: ${itemUser.company_id}`}>
+                            {itemUser.company_id}
+                          </span>
+                        )}
+                        {itemUser.unit_id && (
+                          <span className="text-[9px] font-medium px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-700 border border-amber-200 shrink-0" title={`Unit/Divisi: ${itemUser.unit_id}`}>
+                            {itemUser.unit_id}
+                          </span>
+                        )}
                         {itemUser.jenis_kelamin && (
                           <span className={`text-[9px] font-medium px-1.5 py-0.2 rounded-md shrink-0 ${
                             itemUser.jenis_kelamin === 'wanita' 

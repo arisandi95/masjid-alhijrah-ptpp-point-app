@@ -24,43 +24,108 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [loadingMaster, setLoadingMaster] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [filteredUnits, setFilteredUnits] = useState<Unit[]>([]);
+  const [isCustomUnit, setIsCustomUnit] = useState(false);
+  const [customUnitText, setCustomUnitText] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
     const fetchMasterData = async () => {
-      const [compRes, unitRes] = await Promise.all([
-        api.getCompanies(),
-        api.getUnits(),
-      ]);
-      if (compRes.success && compRes.data) {
-        setCompanies(compRes.data);
-        if (compRes.data.length > 0) {
-          setCompanyId(compRes.data[0].company_id);
+      setLoadingMaster(true);
+      try {
+        const [compRes, unitRes] = await Promise.all([
+          api.getCompanies(),
+          api.getUnits(),
+        ]);
+        if (!isMounted) return;
+
+        let compList: Company[] = [];
+        if (compRes.success && Array.isArray(compRes.data) && compRes.data.length > 0) {
+          compList = compRes.data;
+        } else {
+          const { DEFAULT_COMPANIES } = await import('../services/mockStorage');
+          compList = DEFAULT_COMPANIES;
         }
-      }
-      if (unitRes.success && unitRes.data) {
-        setUnits(unitRes.data);
+
+        let unitList: Unit[] = [];
+        if (unitRes.success && Array.isArray(unitRes.data) && unitRes.data.length > 0) {
+          unitList = unitRes.data;
+        } else {
+          const { DEFAULT_UNITS } = await import('../services/mockStorage');
+          unitList = DEFAULT_UNITS;
+        }
+
+        setCompanies(compList);
+        setUnits(unitList);
+
+        if (compList.length > 0) {
+          setCompanyId(String(compList[0].company_id).trim());
+        }
+      } catch (err) {
+        console.warn('Error fetching master data:', err);
+        const { DEFAULT_COMPANIES, DEFAULT_UNITS } = await import('../services/mockStorage');
+        if (isMounted) {
+          setCompanies(DEFAULT_COMPANIES);
+          setUnits(DEFAULT_UNITS);
+          setCompanyId(DEFAULT_COMPANIES[0].company_id);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingMaster(false);
+        }
       }
     };
     fetchMasterData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (companyId) {
-      const matchingUnits = units.filter(u => u.company_id === companyId);
-      setFilteredUnits(matchingUnits);
-      if (matchingUnits.length > 0) {
-        setUnitId(matchingUnits[0].unit_id);
-      } else {
-        setUnitId('');
+    if (!companyId) {
+      setFilteredUnits([]);
+      if (!isCustomUnit) setUnitId('');
+      return;
+    }
+
+    const compIdStr = String(companyId).trim();
+    const selectedComp = companies.find(
+      (c) => String(c.company_id).trim() === compIdStr || c.company_name.trim().toLowerCase() === compIdStr.toLowerCase()
+    );
+    const compNameStr = selectedComp ? String(selectedComp.company_name).trim().toLowerCase() : '';
+
+    // Filter units: match strictly by company_id or company_name
+    let matching = units.filter((u) => {
+      if (!u) return false;
+      const uComp = String(u.company_id || '').trim();
+      if (uComp === compIdStr) return true;
+      if (compNameStr && uComp.toLowerCase() === compNameStr) return true;
+      return false;
+    });
+
+    // If no specific unit matches, fallback to all units from master
+    if (matching.length === 0 && units.length > 0) {
+      matching = units;
+    }
+
+    setFilteredUnits(matching);
+
+    if (isCustomUnit) {
+      return;
+    }
+
+    if (matching.length > 0) {
+      const isCurrentValid = matching.some((u) => String(u.unit_id).trim() === String(unitId).trim());
+      if (!isCurrentValid) {
+        setUnitId(String(matching[0].unit_id).trim());
       }
     } else {
-      setFilteredUnits([]);
       setUnitId('');
     }
-  }, [companyId, units]);
+  }, [companyId, units, companies, isCustomUnit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,8 +150,19 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
       setErrorMsg('Pilih perusahaan tempat Anda bekerja');
       return;
     }
-    if (!unitId) {
-      setErrorMsg('Pilih unit/divisi tempat Anda bekerja');
+    const selectedComp = companies.find(
+      (c) => String(c.company_id).trim() === String(companyId).trim()
+    );
+    const selectedUnitObj = filteredUnits.find(
+      (u) => String(u.unit_id).trim() === String(unitId).trim()
+    );
+
+    const chosenUnitName = isCustomUnit
+      ? customUnitText.trim()
+      : (selectedUnitObj ? selectedUnitObj.unit_name : unitId);
+
+    if (!chosenUnitName) {
+      setErrorMsg('Pilih atau tuliskan unit/divisi tempat Anda bekerja');
       return;
     }
 
@@ -100,8 +176,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
         jenis_kelamin: jenisKelamin,
         status_jamaah: 'Pegawai/PTPP',
         status_pegawai: statusPegawai,
-        company_id: companyId,
-        unit_id: unitId,
+        company_id: selectedComp ? selectedComp.company_name : companyId,
+        unit_id: chosenUnitName,
       });
       if (!res.success) {
         setErrorMsg(res.error || 'Pendaftaran gagal');
@@ -296,7 +372,9 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
                   className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24]"
                   required
                 >
-                  <option value="" disabled>Pilih Perusahaan...</option>
+                  <option value="" disabled>
+                    {loadingMaster ? 'Memuat data perusahaan...' : 'Pilih Perusahaan...'}
+                  </option>
                   {companies.map((c) => (
                     <option key={c.company_id} value={c.company_id}>{c.company_name}</option>
                   ))}
@@ -316,21 +394,49 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
                   <Layers className="w-4 h-4" />
                 </div>
                 <select
-                  value={unitId}
-                  onChange={(e) => setUnitId(e.target.value)}
-                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24] disabled:opacity-60 disabled:cursor-not-allowed"
+                  value={isCustomUnit ? 'LAINNYA' : unitId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'LAINNYA') {
+                      setIsCustomUnit(true);
+                      setUnitId('LAINNYA');
+                    } else {
+                      setIsCustomUnit(false);
+                      setUnitId(val);
+                    }
+                  }}
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7] appearance-none cursor-pointer text-[#1F2A24]"
                   required
-                  disabled={!companyId || filteredUnits.length === 0}
                 >
-                  <option value="" disabled>Pilih Unit...</option>
+                  <option value="" disabled>
+                    {loadingMaster ? 'Memuat unit...' : (!companyId ? 'Pilih Perusahaan dahulu' : 'Pilih Unit / Divisi...')}
+                  </option>
                   {filteredUnits.map((u) => (
                     <option key={u.unit_id} value={u.unit_id}>{u.unit_name}</option>
                   ))}
+                  <option value="LAINNYA">+ Unit Lainnya / Ketik Manual...</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#6B7568]">
                   <ChevronDown className="w-4 h-4" />
                 </div>
               </div>
+
+              {isCustomUnit && (
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={customUnitText}
+                    onChange={(e) => setCustomUnitText(e.target.value)}
+                    placeholder="Contoh: Proyek Gedung A, Proyek Tol, Divisi Legal..."
+                    className="w-full px-3.5 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-white text-[#1F2A24]"
+                    required
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-[#6B7568] mt-1 pl-1">
+                    Ketikkan unit, divisi, proyek, atau penempatan Anda
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

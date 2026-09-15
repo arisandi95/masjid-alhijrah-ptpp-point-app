@@ -18,6 +18,7 @@ import { EventHistoryItem } from '../components/EventHistoryItem';
 import { PWAInstallBanner } from '../components/PWAInstallBanner';
 import { api } from '../services/api';
 import { MasterEvent, ScanLog } from '../types';
+import { getCompanyDisplayName, getUnitDisplayName } from '../utils/companyUtils';
 
 interface HomePageProps {
   onGoToScan: () => void;
@@ -98,9 +99,24 @@ export const HomePage: React.FC<HomePageProps> = ({
               {user?.nama || 'Jamaah Al Hijrah'}
             </h1>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-              {user?.status_jamaah && (
+              {user?.status_pegawai && (
+                <span className="text-[10px] font-medium text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200/60">
+                  {user.status_pegawai}
+                </span>
+              )}
+              {user?.status_jamaah && !user?.status_pegawai && (
                 <span className="text-[10px] font-medium text-[#0F6B4C] bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/60">
                   {user.status_jamaah}
+                </span>
+              )}
+              {user?.company_id && (
+                <span className="text-[10px] text-[#6B7568] truncate max-w-[120px]" title={getCompanyDisplayName(user.company_id)}>
+                  • {getCompanyDisplayName(user.company_id)}
+                </span>
+              )}
+              {user?.unit_id && (
+                <span className="text-[10px] text-[#6B7568] truncate max-w-[120px]" title={getUnitDisplayName(user.unit_id)}>
+                  • {getUnitDisplayName(user.unit_id)}
                 </span>
               )}
               {user?.jenis_kelamin && (

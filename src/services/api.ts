@@ -30,32 +30,35 @@ function generateUUID(): string {
 
 /**
  * Fetch helper for Google Apps Script Web App.
- * Apps Script redirects on POST/GET and requires text/plain body to avoid CORS preflight issues.
+ * Apps Script redirects on GET and returns JSON cleanly.
+ * For GET, parameters are passed in URL search params.
+ * For POST (if needed), parameters are sent via text/plain body, with automatic GET fallback.
  */
-async function callGasApi<T>(action: string, payload: Record<string, any> = {}): Promise<ApiResponse<T>> {
+async function callGasApi<T>(action: string, payload: Record<string, any> = {}, preferPost = false): Promise<ApiResponse<T>> {
   const gasUrl = getGasUrl();
   if (!gasUrl) {
     throw new Error('NO_GAS_URL');
   }
 
-  try {
+  // Helper to execute GET
+  const executeGet = async (): Promise<ApiResponse<T>> => {
     const url = new URL(gasUrl);
     url.searchParams.set('action', action);
-
-    const bodyData = { action, ...payload };
-
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+      }
+    }
     const res = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(bodyData),
+      method: 'GET',
     });
-
     if (!res.ok) {
       throw new Error(`Koneksi server gagal (Status: ${res.status})`);
     }
-
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      throw new Error('Respons Apps Script berupa halaman HTML, periksa deployment.');
+    }
     const json = await res.json();
     if (json.success === false) {
       return {
@@ -64,14 +67,56 @@ async function callGasApi<T>(action: string, payload: Record<string, any> = {}):
         data: json.data,
       };
     }
-
     return {
       success: true,
       data: (json.data !== undefined ? json.data : json) as T,
       message: json.message,
     };
+  };
+
+  // Helper to execute POST with auto fallback to GET
+  const executePost = async (): Promise<ApiResponse<T>> => {
+    const url = new URL(gasUrl);
+    url.searchParams.set('action', action);
+    const bodyData = { action, ...payload };
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(bodyData),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/html') || !res.ok) {
+      return await executeGet();
+    }
+    const json = await res.json();
+    if (json.success === false) {
+      return {
+        success: false,
+        error: json.error || json.message || 'Terjadi kesalahan pada sistem backend Google Sheets.',
+        data: json.data,
+      };
+    }
+    return {
+      success: true,
+      data: (json.data !== undefined ? json.data : json) as T,
+      message: json.message,
+    };
+  };
+
+  try {
+    if (!preferPost) {
+      return await executeGet();
+    } else {
+      try {
+        return await executePost();
+      } catch {
+        return await executeGet();
+      }
+    }
   } catch (err: any) {
-    console.warn('GAS API call error:', err);
+    console.warn(`GAS API call error for action '${action}':`, err);
     throw err;
   }
 }
@@ -88,9 +133,7 @@ export const api = {
       const u = new URL(targetUrl);
       u.searchParams.set('action', 'ping');
       const res = await fetch(u.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'ping' }),
+        method: 'GET',
       });
       const data = await res.json();
       if (data && data.success) {
@@ -592,7 +635,17 @@ export const api = {
     if (getGasUrl()) {
       try {
         const res = await callGasApi<Company[]>('getCompanies');
-        return res;
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const cleanCompanies = res.data
+            .map((c: any) => ({
+              company_id: String(c.company_id !== undefined ? c.company_id : c.id || '').trim(),
+              company_name: String(c.company_name !== undefined ? c.company_name : c.nama || c.company_id || '').trim(),
+            }))
+            .filter((c) => c.company_id && c.company_name);
+          if (cleanCompanies.length > 0) {
+            return { success: true, data: cleanCompanies };
+          }
+        }
       } catch (e: any) {
         if (e.message !== 'NO_GAS_URL') {
           console.warn('GAS companies error:', e);
@@ -607,7 +660,18 @@ export const api = {
     if (getGasUrl()) {
       try {
         const res = await callGasApi<Unit[]>('getUnits');
-        return res;
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const cleanUnits = res.data
+            .map((u: any) => ({
+              unit_id: String(u.unit_id !== undefined ? u.unit_id : u.id || '').trim(),
+              company_id: String(u.company_id !== undefined ? u.company_id : u.company || '').trim(),
+              unit_name: String(u.unit_name !== undefined ? u.unit_name : u.nama || u.unit_id || '').trim(),
+            }))
+            .filter((u) => u.unit_id && u.unit_name);
+          if (cleanUnits.length > 0) {
+            return { success: true, data: cleanUnits };
+          }
+        }
       } catch (e: any) {
         if (e.message !== 'NO_GAS_URL') {
           console.warn('GAS units error:', e);
