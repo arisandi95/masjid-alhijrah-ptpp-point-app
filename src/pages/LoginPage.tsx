@@ -38,9 +38,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] flex flex-col justify-between p-5 max-w-md mx-auto">
+    <div className="min-h-screen bg-[#FAFAF7] flex flex-col justify-center py-8 px-5 max-w-md mx-auto">
       {/* Header Branding */}
-      <div className="pt-8 pb-4 text-center">
+      <div className="pb-5 text-center">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0F6B4C] to-[#094A34] text-[#FAF3D1] flex items-center justify-center mx-auto shadow-md mb-3 border border-[#D4AF37]/30">
           <svg width="34" height="34" viewBox="0 0 100 100" fill="currentColor">
             <path d="M50 8 C70 8 88 35 90 62 L90 88 L10 88 L10 62 C12 35 30 8 50 8 Z" />
@@ -56,7 +56,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
       </div>
 
       {/* Main Form Card */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 my-auto">
+      <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
         <h2 className="text-lg font-bold text-[#1F2A24] font-heading mb-1">
           Masuk Akun Jamaah
         </h2>
@@ -140,13 +140,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
         </form>
       </div>
 
-      {/* Footer Register Link */}
-      <div className="py-4 text-center">
+      {/* Register Link directly under login card */}
+      <div className="mt-4 text-center">
         <p className="text-xs text-[#6B7568]">
           Belum punya akun jamaah?{' '}
           <button
+            type="button"
             onClick={onGoToRegister}
-            className="font-bold text-[#0F6B4C] hover:underline"
+            className="font-bold text-[#0F6B4C] hover:underline cursor-pointer"
           >
             Daftar Baru di Sini
           </button>
