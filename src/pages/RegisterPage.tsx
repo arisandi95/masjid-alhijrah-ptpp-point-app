@@ -191,11 +191,6 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col justify-between p-4 sm:p-5 max-w-md mx-auto">
       {/* Header */}
       <div className="pt-4 pb-2 text-center">
-        <div className="w-13 h-13 rounded-2xl bg-[#0F6B4C] text-[#FAF3D1] flex items-center justify-center mx-auto shadow-sm mb-2">
-          <svg width="26" height="26" viewBox="0 0 100 100" fill="currentColor">
-            <path d="M50 8 C70 8 88 35 90 62 L90 88 L10 88 L10 62 C12 35 30 8 50 8 Z" />
-          </svg>
-        </div>
         <h1 className="text-xl font-extrabold text-[#1F2A24] font-heading">
           Pendaftaran Jamaah
         </h1>

@@ -41,12 +41,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
     <div className="min-h-screen bg-[#FAFAF7] flex flex-col justify-center py-8 px-5 max-w-md mx-auto">
       {/* Header Branding */}
       <div className="pb-5 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0F6B4C] to-[#094A34] text-[#FAF3D1] flex items-center justify-center mx-auto shadow-md mb-3 border border-[#D4AF37]/30">
-          <svg width="34" height="34" viewBox="0 0 100 100" fill="currentColor">
-            <path d="M50 8 C70 8 88 35 90 62 L90 88 L10 88 L10 62 C12 35 30 8 50 8 Z" />
-            <path d="M50 40 C60 40 70 52 70 88 L30 88 C30 52 40 40 50 40 Z" fill="#094A34" />
-          </svg>
-        </div>
         <h1 className="text-xl font-extrabold text-[#1F2A24] font-heading tracking-tight">
           Masjid Al Hijrah PTPP
         </h1>
