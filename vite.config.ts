@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import {defineConfig, Plugin} from 'vite';
+import {defineConfig, loadEnv, Plugin} from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 // LINT.IfChange(aistudio_media_plugin)
@@ -65,7 +65,10 @@ function aistudioMediaPlugin(): Plugin {
 }
 // LINT.ThenChange(//depot/google3/java/com/google/alkali/boq/makersuite/applet_dev_service/templates/initializers/react_theme/vite.config.ts:aistudio_media_plugin)
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const vercelGasUrl = env.GAS_URL || env.VITE_GAS_URL || process.env.GAS_URL || process.env.VITE_GAS_URL || '';
+
   return {
     plugins: [
       react(),
@@ -117,13 +120,13 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modifyâ€”file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     define: {
-      'import.meta.env.GAS_URL': JSON.stringify(process.env.GAS_URL || ''),
+      'import.meta.env.GAS_URL': JSON.stringify(vercelGasUrl),
     },
   };
 });

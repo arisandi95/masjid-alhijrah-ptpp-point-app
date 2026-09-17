@@ -1,4 +1,4 @@
-import { ApiResponse, EventReview, EventReviewInput, JenisKelamin, MasterEvent, ScanLog, ScanResult, StatusJamaah, User, Company, Unit } from '../types';
+import { ApiResponse, EventReview, EventReviewInput, JenisKelamin, MasterEvent, ScanLog, ScanResult, StatusJamaah, User, Company, Unit, VideoItem, VideoInput } from '../types';
 import {
   DEFAULT_USERS,
   getGasUrl,
@@ -6,11 +6,14 @@ import {
   getLocalLogs,
   getLocalReviews,
   getLocalUsers,
+  getLocalVideos,
   saveLocalEvents,
   saveLocalLogs,
   saveLocalReviews,
   saveLocalUsers,
+  saveLocalVideos,
 } from './mockStorage';
+import { extractYouTubeId } from '../utils/youtubeUtils';
 
 // Format Phone Helper: Ensure 62xxxxxxxxxx
 export function formatPhoneNumber(phone: string): string {
@@ -416,11 +419,27 @@ export const api = {
     // Try Google Apps Script if URL is configured
     if (getGasUrl()) {
       try {
+        const kesanTerbaik = review?.kesan_terbaik?.trim() || '';
+        const halKurang = (review?.hal_kurang || review?.hal_perlu_diperbaiki || '').trim();
+        const usulanKegiatan = (review?.usulan_kegiatan || review?.usulan_tema || '').trim();
+
         const gasResult = await callGasApi<any>('scanQR', {
           user_id: userId,
           qr_token: tokenClean,
           review,
-        });
+          // Kirim juga parameter flattened agar langsung terbaca baik melalui GET maupun POST
+          ...(review ? {
+            skor_materi: review.skor_materi,
+            skor_kenyamanan: review.skor_kenyamanan,
+            skor_sound: review.skor_sound,
+            skor_panitia: review.skor_panitia,
+            kesan_terbaik: kesanTerbaik,
+            hal_kurang: halKurang,
+            usulan_kegiatan: usulanKegiatan,
+            hal_perlu_diperbaiki: halKurang,
+            usulan_tema: usulanKegiatan,
+          } : {}),
+        }, !!review);
 
         if (!gasResult.success) {
           return {
@@ -522,8 +541,10 @@ export const api = {
         skor_sound: review.skor_sound,
         skor_panitia: review.skor_panitia,
         kesan_terbaik: review.kesan_terbaik || '',
-        hal_kurang: review.hal_kurang || '',
-        usulan_kegiatan: review.usulan_kegiatan || '',
+        hal_kurang: review.hal_kurang || review.hal_perlu_diperbaiki || '',
+        usulan_kegiatan: review.usulan_kegiatan || review.usulan_tema || '',
+        hal_perlu_diperbaiki: review.hal_kurang || review.hal_perlu_diperbaiki || '',
+        usulan_tema: review.usulan_kegiatan || review.usulan_tema || '',
         submitted_at: new Date().toISOString(),
       };
       reviews.unshift(newReview);
@@ -822,6 +843,23 @@ export const api = {
 
   // 8. TOGGLE EVENT STATUS (Admin)
   async toggleEventStatus(eventId: string): Promise<ApiResponse<MasterEvent>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<MasterEvent>('toggleEventStatus', { event_id: eventId });
+        if (res.success) {
+          const events = getLocalEvents();
+          const target = events.find((e) => e.event_id === eventId);
+          if (target) {
+            target.status = res.data?.status || (target.status === 'active' ? 'inactive' : 'active');
+            saveLocalEvents(events);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS toggleEventStatus error:', e);
+      }
+    }
+
     const events = getLocalEvents();
     const target = events.find((e) => e.event_id === eventId);
     if (!target) {
@@ -924,5 +962,109 @@ export const api = {
     }
     const reviews = getLocalReviews();
     return { success: true, data: reviews };
+  },
+
+  // 13. GET VIDEOS (User & Admin)
+  async getVideos(): Promise<ApiResponse<VideoItem[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<VideoItem[]>('getVideos');
+        if (res.success && res.data) {
+          saveLocalVideos(res.data);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getVideos error:', e);
+      }
+    }
+    const videos = getLocalVideos();
+    return { success: true, data: videos.filter((v) => v.status !== 'inactive') };
+  },
+
+  // 14. ADD VIDEO (Admin)
+  async addVideo(input: VideoInput): Promise<ApiResponse<VideoItem>> {
+    const title = input.title?.trim();
+    const description = input.description?.trim() || '';
+    const youtubeUrl = input.youtube_url?.trim();
+
+    if (!title) {
+      return { success: false, error: 'Judul video wajib diisi.' };
+    }
+    if (!youtubeUrl) {
+      return { success: false, error: 'Link video YouTube wajib diisi.' };
+    }
+
+    const youtubeId = extractYouTubeId(youtubeUrl);
+    if (!youtubeId) {
+      return {
+        success: false,
+        error: 'Format link YouTube tidak valid. Harap gunakan link seperti https://www.youtube.com/watch?v=... atau https://youtu.be/...',
+      };
+    }
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<VideoItem>('addVideo', {
+          title,
+          description,
+          youtube_url: youtubeUrl,
+          youtube_id: youtubeId,
+        }, true);
+        if (res.success && res.data) {
+          const current = getLocalVideos();
+          saveLocalVideos([res.data, ...current]);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS addVideo error:', e);
+      }
+    }
+
+    const newVideo: VideoItem = {
+      video_id: 'vid_' + Date.now(),
+      title,
+      description,
+      youtube_url: youtubeUrl,
+      youtube_id: youtubeId,
+      created_at: new Date().toISOString(),
+      status: 'active',
+    };
+
+    const current = getLocalVideos();
+    const updated = [newVideo, ...current];
+    saveLocalVideos(updated);
+
+    return {
+      success: true,
+      data: newVideo,
+      message: 'Video kajian berhasil ditambahkan!',
+    };
+  },
+
+  // 15. DELETE VIDEO (Admin)
+  async deleteVideo(videoId: string): Promise<ApiResponse<boolean>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<boolean>('deleteVideo', { video_id: videoId }, true);
+        if (res.success) {
+          const current = getLocalVideos();
+          const updated = current.filter((v) => v.video_id !== videoId);
+          saveLocalVideos(updated);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS deleteVideo error:', e);
+      }
+    }
+
+    const current = getLocalVideos();
+    const updated = current.filter((v) => v.video_id !== videoId);
+    saveLocalVideos(updated);
+
+    return {
+      success: true,
+      data: true,
+      message: 'Video kajian berhasil dihapus.',
+    };
   },
 };

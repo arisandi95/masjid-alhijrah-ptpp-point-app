@@ -11,6 +11,8 @@ import {
   BellRing,
   ShieldCheck,
   Gift,
+  Video as VideoIcon,
+  Play,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PointBadge } from '../components/PointBadge';
@@ -23,12 +25,14 @@ import { getCompanyDisplayName, getUnitDisplayName } from '../utils/companyUtils
 interface HomePageProps {
   onGoToScan: () => void;
   onGoToHistory: () => void;
+  onGoToVideos?: () => void;
   onGoToAdmin?: () => void;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({
   onGoToScan,
   onGoToHistory,
+  onGoToVideos,
   onGoToAdmin,
 }) => {
   const { user, logout } = useAuth();
@@ -246,6 +250,40 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         );
       })()}
+
+      {/* Fitur Baru: Banner Video Kajian */}
+      {onGoToVideos && (
+        <div
+          onClick={onGoToVideos}
+          className="bg-gradient-to-r from-[#14261D] to-[#1E3A2D] rounded-3xl p-3.5 px-4 text-white shadow-xs border border-[#0F6B4C]/30 flex items-center justify-between cursor-pointer hover:border-[#D4AF37]/50 transition group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white/10 group-hover:bg-[#0F6B4C] text-[#D4AF37] group-hover:text-white flex items-center justify-center shrink-0 transition">
+              <Play className="w-5 h-5 fill-current ml-0.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">
+                  Fitur Baru
+                </span>
+                <span className="px-1.5 py-0.2 bg-red-600/90 text-[9px] font-bold rounded text-white">
+                  YouTube
+                </span>
+              </div>
+              <p className="text-xs font-bold text-white font-heading leading-tight">
+                Video Kajian & Tausiyah
+              </p>
+              <p className="text-[11px] text-white/70 mt-0.5">
+                Tonton rekaman kajian & ilmu bermanfaat
+              </p>
+            </div>
+          </div>
+
+          <div className="w-8 h-8 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center shrink-0 text-white transition">
+            <ChevronRight className="w-4 h-4" />
+          </div>
+        </div>
+      )}
 
       {/* Recent History Section */}
       <div className="space-y-2.5 pt-1">

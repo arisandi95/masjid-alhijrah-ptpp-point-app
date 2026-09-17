@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage';
 import { ScanPage } from './pages/ScanPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { AdminEventPage } from './pages/AdminEventPage';
+import { VideosPage } from './pages/VideosPage';
 import { BottomNav, TabType } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
@@ -62,7 +63,15 @@ function AppContent() {
           <HomePage
             onGoToScan={() => setActiveTab('scan')}
             onGoToHistory={() => setActiveTab('history')}
+            onGoToVideos={() => setActiveTab('videos')}
             onGoToAdmin={isAdmin ? () => setActiveTab('admin') : undefined}
+          />
+        )}
+
+        {safeActiveTab === 'videos' && (
+          <VideosPage
+            onGoToAdmin={isAdmin ? () => setActiveTab('admin') : undefined}
+            isAdmin={isAdmin}
           />
         )}
 

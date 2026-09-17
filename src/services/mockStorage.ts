@@ -1,30 +1,80 @@
-import { MasterEvent, ScanLog, User, EventReview } from '../types';
+import { MasterEvent, ScanLog, User, EventReview, VideoItem } from '../types';
 
 const USERS_KEY = 'alhijrah_users_db';
 const EVENTS_KEY = 'alhijrah_events_db';
 const LOGS_KEY = 'alhijrah_logs_db';
 const REVIEWS_KEY = 'alhijrah_reviews_db';
+const VIDEOS_KEY = 'alhijrah_videos_db';
 const COMPANIES_KEY = 'alhijrah_companies_db';
 const UNITS_KEY = 'alhijrah_units_db';
 const GAS_URL_KEY = 'alhijrah_gas_webapp_url';
 
-export function getGasUrl(): string {
+/**
+ * Mengambil URL dari Environment Variable Vercel ("GAS_URL" atau "VITE_GAS_URL")
+ */
+export function getEnvGasUrl(): string {
   try {
-    const envUrl = import.meta.env.VITE_GAS_URL || import.meta.env.GAS_URL;
-    if (envUrl) {
-      return envUrl;
-    }
-    return localStorage.getItem(GAS_URL_KEY) || '';
+    const url = (import.meta.env.GAS_URL || import.meta.env.VITE_GAS_URL || '') as string;
+    return url.trim();
   } catch {
     return '';
   }
 }
 
+/**
+ * Mengambil URL kustom yang tersimpan dari form input jika diisi
+ */
+export function getCustomGasUrl(): string {
+  try {
+    return (localStorage.getItem(GAS_URL_KEY) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Mengambil URL Google Apps Script yang aktif:
+ * - Jika input diisi (tersimpan dari form) -> get dari form ini
+ * - Jika input dikosongkan -> get dari env Vercel "GAS_URL"
+ */
+export function getGasUrl(): string {
+  try {
+    const customUrl = getCustomGasUrl();
+    if (customUrl) {
+      return customUrl;
+    }
+    return getEnvGasUrl();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Menyimpan URL dari form.
+ * Jika input dikosongkan (empty string), hapus custom URL agar sistem otomatis get dari env Vercel.
+ */
 export function setGasUrl(url: string): void {
   try {
-    localStorage.setItem(GAS_URL_KEY, url.trim());
+    const cleanUrl = url.trim();
+    if (!cleanUrl) {
+      localStorage.removeItem(GAS_URL_KEY);
+    } else {
+      localStorage.setItem(GAS_URL_KEY, cleanUrl);
+    }
   } catch (e) {
     console.error('Failed to save GAS URL', e);
+  }
+}
+
+/**
+ * Mengosongkan input dan mereset ke env Vercel
+ */
+export function resetGasUrl(): string {
+  try {
+    localStorage.removeItem(GAS_URL_KEY);
+    return '';
+  } catch {
+    return '';
   }
 }
 
@@ -368,9 +418,62 @@ export function saveLocalReviews(reviews: EventReview[]): void {
   }
 }
 
+// Initial Seed Videos
+const DEFAULT_VIDEOS: VideoItem[] = [
+  {
+    video_id: 'vid_01_rezeki',
+    title: 'Kajian Tematik: Meraih Keberkahan Rezeki dalam Bekerja & Berkarir',
+    description: 'Pembahasan mendalam mengenai niat ikhlas mencari nafkah, menjauhi syubhat dan riba, serta tips menjaga etika profesional, kejujuran, dan amanah di tempat kerja.',
+    youtube_url: 'https://www.youtube.com/watch?v=k1lF5W3j92c',
+    youtube_id: 'k1lF5W3j92c',
+    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    status: 'active',
+  },
+  {
+    video_id: 'vid_02_tafsir',
+    title: 'Tafsir Surah Al-Fatihah: Induk Al-Qur\'an & Sumber Ketenangan Batin',
+    description: 'Menyelami keindahan dan rahasia setiap ayat dalam Surah Al-Fatihah agar shalat kita bukan sekadar rutinitas, melainkan dialog khusyuk dengan Allah Subhanahu Wa Ta\'ala.',
+    youtube_url: 'https://www.youtube.com/watch?v=V1bFr2SWP1I',
+    youtube_id: 'V1bFr2SWP1I',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    status: 'active',
+  },
+  {
+    video_id: 'vid_03_adab',
+    title: 'Adab Berjamaah & Memakmurkan Masjid di Lingkungan BUMN',
+    description: 'Panduan tata krama shaf shalat berjamaah, adab iktikaf di sela jam istirahat kantor, serta urgensi menjaga kebersihan rumah Allah bersama keluarga besar Masjid Al Hijrah.',
+    youtube_url: 'https://www.youtube.com/watch?v=LXb3EKWsInQ',
+    youtube_id: 'LXb3EKWsInQ',
+    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+    status: 'active',
+  },
+];
+
+export function getLocalVideos(): VideoItem[] {
+  try {
+    const raw = localStorage.getItem(VIDEOS_KEY);
+    if (!raw) {
+      localStorage.setItem(VIDEOS_KEY, JSON.stringify(DEFAULT_VIDEOS));
+      return DEFAULT_VIDEOS;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_VIDEOS;
+  }
+}
+
+export function saveLocalVideos(videos: VideoItem[]): void {
+  try {
+    localStorage.setItem(VIDEOS_KEY, JSON.stringify(videos));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 export function resetToDefaultData(): void {
   localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS));
   localStorage.setItem(EVENTS_KEY, JSON.stringify(DEFAULT_EVENTS));
   localStorage.setItem(LOGS_KEY, JSON.stringify(DEFAULT_LOGS));
   localStorage.setItem(REVIEWS_KEY, JSON.stringify(DEFAULT_REVIEWS));
+  localStorage.setItem(VIDEOS_KEY, JSON.stringify(DEFAULT_VIDEOS));
 }

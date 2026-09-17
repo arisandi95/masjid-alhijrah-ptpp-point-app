@@ -68,42 +68,48 @@ function setupSheets() {
   }
   
   // 2. Sheet master_event
-  let sheetEvent = ss.getSheetByName("master_event");
+  let sheetEvent = getSheetCaseInsensitive(ss, "master_event");
   if (!sheetEvent) {
     sheetEvent = ss.insertSheet("master_event");
     sheetEvent.appendRow(["event_id", "nama_event", "tanggal", "qr_token", "poin_value", "status", "pemateri", "waktu", "lokasi", "event_type", "kuota", "created_at"]);
   } else {
     // Auto-migrate master_event headers jika kolom pemateri, waktu, lokasi, event_type, atau kuota belum ada
-    const lastCol = sheetEvent.getLastColumn() || 1;
-    const headers = sheetEvent.getRange(1, 1, 1, lastCol).getValues()[0];
+    let currentLastCol = sheetEvent.getLastColumn() || 1;
+    const headers = sheetEvent.getRange(1, 1, 1, currentLastCol).getValues()[0];
     const headerLower = headers.map(h => (h || "").toString().toLowerCase().trim());
     
-    if (!headerLower.includes("pemateri")) {
-      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("pemateri");
+    if (!headerLower.some(h => ["pemateri", "narasumber", "ustadz"].includes(h))) {
+      currentLastCol++;
+      sheetEvent.getRange(1, currentLastCol).setValue("pemateri");
     }
-    if (!headerLower.includes("waktu")) {
-      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("waktu");
+    if (!headerLower.some(h => ["waktu", "jam"].includes(h))) {
+      currentLastCol++;
+      sheetEvent.getRange(1, currentLastCol).setValue("waktu");
     }
-    if (!headerLower.includes("lokasi")) {
-      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("lokasi");
+    if (!headerLower.some(h => ["lokasi", "tempat", "ruangan", "lokasi_acara", "lokasi acara", "venue"].includes(h))) {
+      currentLastCol++;
+      sheetEvent.getRange(1, currentLastCol).setValue("lokasi");
     }
-    if (!headerLower.includes("event_type")) {
-      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("event_type");
+    if (!headerLower.some(h => ["event_type", "event type", "tipe", "mode"].includes(h))) {
+      currentLastCol++;
+      sheetEvent.getRange(1, currentLastCol).setValue("event_type");
     }
-    if (!headerLower.includes("kuota")) {
-      sheetEvent.getRange(1, sheetEvent.getLastColumn() + 1).setValue("kuota");
+    if (!headerLower.some(h => ["kuota", "quota", "limit"].includes(h))) {
+      currentLastCol++;
+      sheetEvent.getRange(1, currentLastCol).setValue("kuota");
     }
+    SpreadsheetApp.flush();
   }
   
   // 3. Sheet scan_log
-  let sheetLog = ss.getSheetByName("scan_log");
+  let sheetLog = getSheetCaseInsensitive(ss, "scan_log");
   if (!sheetLog) {
     sheetLog = ss.insertSheet("scan_log");
     sheetLog.appendRow(["log_id", "user_id", "event_id", "poin_didapat", "scanned_at"]);
   }
 
   // 4. Sheet penilaian_acara (Ulasan & Rating Jamaah)
-  let sheetReview = ss.getSheetByName("penilaian_acara");
+  let sheetReview = getSheetCaseInsensitive(ss, "penilaian_acara");
   if (!sheetReview) {
     sheetReview = ss.insertSheet("penilaian_acara");
     sheetReview.appendRow([
@@ -121,6 +127,24 @@ function setupSheets() {
       "usulan_kegiatan",
       "submitted_at"
     ]);
+  } else {
+    // Auto-migrate: pastikan kolom baru evaluasi kualitatif tersedia di header
+    const lastCol = sheetReview.getLastColumn() || 1;
+    const headers = sheetReview.getRange(1, 1, 1, lastCol).getValues()[0];
+    const headerLower = headers.map(h => (h || "").toString().toLowerCase().trim());
+    
+    if (!headerLower.includes("kesan_terbaik") && !headerLower.includes("kesan terbaik") && !headerLower.includes("kesanterbaik")) {
+      sheetReview.getRange(1, sheetReview.getLastColumn() + 1).setValue("kesan_terbaik");
+    }
+    if (!headerLower.includes("hal_kurang") && !headerLower.includes("hal kurang") && !headerLower.includes("halkurang") && !headerLower.includes("hal_perlu_diperbaiki") && !headerLower.includes("hal perlu diperbaiki")) {
+      sheetReview.getRange(1, sheetReview.getLastColumn() + 1).setValue("hal_kurang");
+    }
+    if (!headerLower.includes("usulan_kegiatan") && !headerLower.includes("usulan kegiatan") && !headerLower.includes("usulankegiatan") && !headerLower.includes("usulan_tema") && !headerLower.includes("usulan tema")) {
+      sheetReview.getRange(1, sheetReview.getLastColumn() + 1).setValue("usulan_kegiatan");
+    }
+    if (!headerLower.includes("submitted_at") && !headerLower.includes("submitted at") && !headerLower.includes("timestamp")) {
+      sheetReview.getRange(1, sheetReview.getLastColumn() + 1).setValue("submitted_at");
+    }
   }
 
   // 5. Sheet company
@@ -143,6 +167,13 @@ function setupSheets() {
     sheetUnit.appendRow(["UNIT_3", "COMP_1", "Divisi Infrastruktur"]);
     sheetUnit.appendRow(["UNIT_4", "COMP_2", "Divisi Alat Berat"]);
     sheetUnit.appendRow(["UNIT_5", "COMP_3", "Divisi Residensial"]);
+  }
+
+  // 7. Sheet videos (Kajian Video YouTube)
+  let sheetVideos = getSheetCaseInsensitive(ss, "videos");
+  if (!sheetVideos) {
+    sheetVideos = ss.insertSheet("videos");
+    sheetVideos.appendRow(["video_id", "title", "description", "youtube_url", "created_at", "status"]);
   }
 }
 
@@ -213,6 +244,39 @@ function sanitizePhone(phone) {
   return clean;
 }
 
+// EKSTRAK YOUTUBE ID (Aman tanpa regex escape issue di Apps Script)
+function extractYouTubeIdGAS(url) {
+  if (!url) return "";
+  var str = url.toString().trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+
+  // youtu.be/ID
+  var idx = str.indexOf("youtu.be/");
+  if (idx !== -1) {
+    var sub = str.substring(idx + 9).split(/[?#&]/)[0];
+    if (sub && sub.length >= 11) return sub.substring(0, 11);
+  }
+
+  // watch?v=ID or &v=ID
+  var vIdx = str.indexOf("v=");
+  if (vIdx !== -1) {
+    var vSub = str.substring(vIdx + 2).split(/[#&]/)[0];
+    if (vSub && vSub.length >= 11) return vSub.substring(0, 11);
+  }
+
+  // embed/ID or shorts/ID or live/ID or /v/ID
+  var patterns = ["embed/", "shorts/", "live/", "/v/"];
+  for (var p = 0; p < patterns.length; p++) {
+    var pIdx = str.indexOf(patterns[p]);
+    if (pIdx !== -1) {
+      var pSub = str.substring(pIdx + patterns[p].length).split(/[?#&]/)[0];
+      if (pSub && pSub.length >= 11) return pSub.substring(0, 11);
+    }
+  }
+
+  return "";
+}
+
 // Handle GET requests
 function doGet(e) {
   try {
@@ -247,8 +311,11 @@ function doPost(e) {
 function handleRouting(action, params) {
   const ss = getSpreadsheet();
   
-  if (action === "ping") {
-    return jsonResponse({ success: true, message: "Apps Script Masjid Al Hijrah Aktif", timestamp: new Date().toISOString() });
+  if (action === "ping" || action === "initDatabase") {
+    try {
+      setupSheets();
+    } catch (e) {}
+    return jsonResponse({ success: true, message: "Apps Script Masjid Al Hijrah Aktif & Terverifikasi", timestamp: new Date().toISOString() });
   }
   
   // 1. REGISTER
@@ -454,21 +521,34 @@ function handleRouting(action, params) {
     if (!user_id || !qr_token) {
       return jsonResponse({ success: false, error: "User ID dan Token QR diperlukan" });
     }
-    const sheetEvents = ss.getSheetByName("master_event");
-    const sheetLogs = ss.getSheetByName("scan_log");
+    const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    const sheetLogs = getSheetCaseInsensitive(ss, "scan_log");
+    if (!sheetEvents) {
+      return jsonResponse({ success: false, error: "Tabel master_event tidak ditemukan" });
+    }
     const eventHeaderMap = getHeaderMap(sheetEvents);
     const eventRows = sheetEvents.getDataRange().getValues();
-    const qrCol = eventHeaderMap["qr_token"] !== undefined ? eventHeaderMap["qr_token"] : 3;
-    const idCol = eventHeaderMap["event_id"] !== undefined ? eventHeaderMap["event_id"] : 0;
-    const namaCol = eventHeaderMap["nama_event"] !== undefined ? eventHeaderMap["nama_event"] : 1;
-    const tglCol = eventHeaderMap["tanggal"] !== undefined ? eventHeaderMap["tanggal"] : 2;
-    const poinCol = eventHeaderMap["poin_value"] !== undefined ? eventHeaderMap["poin_value"] : 4;
-    const statusCol = eventHeaderMap["status"] !== undefined ? eventHeaderMap["status"] : 5;
-    const pemateriCol = eventHeaderMap["pemateri"] !== undefined ? eventHeaderMap["pemateri"] : 6;
-    const waktuCol = eventHeaderMap["waktu"] !== undefined ? eventHeaderMap["waktu"] : 7;
-    const lokasiCol = eventHeaderMap["lokasi"] !== undefined ? eventHeaderMap["lokasi"] : 8;
-    const eventTypeCol = eventHeaderMap["event_type"];
-    const kuotaCol = eventHeaderMap["kuota"];
+
+    const getCol = (aliases, fallbackIdx) => {
+      for (let a = 0; a < aliases.length; a++) {
+        if (eventHeaderMap[aliases[a]] !== undefined) {
+          return eventHeaderMap[aliases[a]];
+        }
+      }
+      return fallbackIdx;
+    };
+
+    const qrCol = getCol(["qr_token", "qr token", "token"], 3);
+    const idCol = getCol(["event_id", "event id", "id"], 0);
+    const namaCol = getCol(["nama_event", "nama event", "event", "nama"], 1);
+    const tglCol = getCol(["tanggal", "tgl", "date"], 2);
+    const poinCol = getCol(["poin_value", "poin value", "poin", "points"], 4);
+    const statusCol = getCol(["status", "active"], 5);
+    const pemateriCol = getCol(["pemateri", "narasumber", "ustadz"], 6);
+    const waktuCol = getCol(["waktu", "jam"], 7);
+    const lokasiCol = getCol(["lokasi", "tempat", "ruangan", "lokasi_acara", "lokasi acara", "venue"], 8);
+    const eventTypeCol = eventHeaderMap["event_type"] !== undefined ? eventHeaderMap["event_type"] : eventHeaderMap["tipe"];
+    const kuotaCol = eventHeaderMap["kuota"] !== undefined ? eventHeaderMap["kuota"] : eventHeaderMap["quota"];
 
     let targetEvent = null;
     for (let i = 1; i < eventRows.length; i++) {
@@ -586,26 +666,38 @@ function handleRouting(action, params) {
     }
     
     try {
-      const sheetEvents = ss.getSheetByName("master_event");
-    const sheetLogs = ss.getSheetByName("scan_log");
-    const sheetUsers = ss.getSheetByName("users");
+      const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+      const sheetLogs = getSheetCaseInsensitive(ss, "scan_log");
+      const sheetUsers = getSheetCaseInsensitive(ss, "users");
+      if (!sheetEvents) {
+        return jsonResponse({ success: false, error: "Tabel master_event tidak ditemukan" });
+      }
     
-    // a. Cari event by qr_token
-    const eventHeaderMap = getHeaderMap(sheetEvents);
-    const eventRows = sheetEvents.getDataRange().getValues();
-    let targetEvent = null;
-    
-    const qrCol = eventHeaderMap["qr_token"] !== undefined ? eventHeaderMap["qr_token"] : 3;
-    const idCol = eventHeaderMap["event_id"] !== undefined ? eventHeaderMap["event_id"] : 0;
-    const namaCol = eventHeaderMap["nama_event"] !== undefined ? eventHeaderMap["nama_event"] : 1;
-    const tglCol = eventHeaderMap["tanggal"] !== undefined ? eventHeaderMap["tanggal"] : 2;
-    const poinCol = eventHeaderMap["poin_value"] !== undefined ? eventHeaderMap["poin_value"] : 4;
-    const statusCol = eventHeaderMap["status"] !== undefined ? eventHeaderMap["status"] : 5;
-    const pemateriCol = eventHeaderMap["pemateri"] !== undefined ? eventHeaderMap["pemateri"] : 6;
-    const waktuCol = eventHeaderMap["waktu"] !== undefined ? eventHeaderMap["waktu"] : 7;
-    const lokasiCol = eventHeaderMap["lokasi"] !== undefined ? eventHeaderMap["lokasi"] : 8;
-    const eventTypeCol = eventHeaderMap["event_type"];
-    const kuotaCol = eventHeaderMap["kuota"];
+      // a. Cari event by qr_token
+      const eventHeaderMap = getHeaderMap(sheetEvents);
+      const eventRows = sheetEvents.getDataRange().getValues();
+      let targetEvent = null;
+
+      const getCol = (aliases, fallbackIdx) => {
+        for (let a = 0; a < aliases.length; a++) {
+          if (eventHeaderMap[aliases[a]] !== undefined) {
+            return eventHeaderMap[aliases[a]];
+          }
+        }
+        return fallbackIdx;
+      };
+      
+      const qrCol = getCol(["qr_token", "qr token", "token"], 3);
+      const idCol = getCol(["event_id", "event id", "id"], 0);
+      const namaCol = getCol(["nama_event", "nama event", "event", "nama"], 1);
+      const tglCol = getCol(["tanggal", "tgl", "date"], 2);
+      const poinCol = getCol(["poin_value", "poin value", "poin", "points"], 4);
+      const statusCol = getCol(["status", "active"], 5);
+      const pemateriCol = getCol(["pemateri", "narasumber", "ustadz"], 6);
+      const waktuCol = getCol(["waktu", "jam"], 7);
+      const lokasiCol = getCol(["lokasi", "tempat", "ruangan", "lokasi_acara", "lokasi acara", "venue"], 8);
+      const eventTypeCol = eventHeaderMap["event_type"] !== undefined ? eventHeaderMap["event_type"] : eventHeaderMap["tipe"];
+      const kuotaCol = eventHeaderMap["kuota"] !== undefined ? eventHeaderMap["kuota"] : eventHeaderMap["quota"];
 
     for (let i = 1; i < eventRows.length; i++) {
       const rowToken = (eventRows[i][qrCol] || "").toString().trim();
@@ -765,35 +857,140 @@ function handleRouting(action, params) {
     }
 
     // f. Simpan Penilaian Acara (Feedback) jika ada
-    const sheetReviews = ss.getSheetByName("penilaian_acara");
-    if (sheetReviews && (params.skor_materi !== undefined || params.review)) {
-      const revObj = params.review || params;
-      const skor_materi = Number(revObj.skor_materi) || 5;
-      const skor_kenyamanan = Number(revObj.skor_kenyamanan) || 5;
-      const skor_sound = Number(revObj.skor_sound) || 5;
-      const skor_panitia = Number(revObj.skor_panitia) || 5;
-      const kesan_terbaik = (revObj.kesan_terbaik || "").toString().trim();
-      const hal_kurang = (revObj.hal_kurang || "").toString().trim();
-      const usulan_kegiatan = (revObj.usulan_kegiatan || "").toString().trim();
+    let sheetReviews = getSheetCaseInsensitive(ss, "penilaian_acara");
+    if (!sheetReviews) {
+      sheetReviews = ss.insertSheet("penilaian_acara");
+      sheetReviews.appendRow([
+        "review_id",
+        "user_id",
+        "event_id",
+        "nama_jamaah",
+        "nama_event",
+        "skor_materi",
+        "skor_kenyamanan",
+        "skor_sound",
+        "skor_panitia",
+        "kesan_terbaik",
+        "hal_kurang",
+        "usulan_kegiatan",
+        "submitted_at"
+      ]);
+    }
+
+    const hasReviewData = params.review !== undefined || 
+      params.skor_materi !== undefined || 
+      params.kesan_terbaik !== undefined || 
+      params.hal_kurang !== undefined || 
+      params.usulan_kegiatan !== undefined ||
+      params.hal_perlu_diperbaiki !== undefined ||
+      params.usulan_tema !== undefined;
+
+    if (sheetReviews && hasReviewData) {
+      // 1. Parsing object review jika berupa string JSON (misal dari GET parameter / URL search params)
+      let revObj = {};
+      if (params.review) {
+        if (typeof params.review === "string") {
+          try {
+            revObj = JSON.parse(params.review);
+          } catch (ex) {
+            revObj = {};
+          }
+        } else if (typeof params.review === "object" && params.review !== null) {
+          revObj = params.review;
+        }
+      }
+
+      // 2. Ekstrak skor penilaian
+      const getNum = (key, fallback) => {
+        if (revObj && revObj[key] !== undefined && revObj[key] !== null && revObj[key] !== "") {
+          const n = Number(revObj[key]);
+          if (!isNaN(n)) return n;
+        }
+        if (params && params[key] !== undefined && params[key] !== null && params[key] !== "") {
+          const n = Number(params[key]);
+          if (!isNaN(n)) return n;
+        }
+        return fallback;
+      };
+
+      const skor_materi = getNum("skor_materi", 5);
+      const skor_kenyamanan = getNum("skor_kenyamanan", 5);
+      const skor_sound = getNum("skor_sound", 5);
+      const skor_panitia = getNum("skor_panitia", 5);
+
+      // 3. Ekstrak nilai teks evaluasi (kesan_terbaik, hal_kurang, usulan_kegiatan) beserta semua aliasnya
+      const getText = (aliases) => {
+        for (let a = 0; a < aliases.length; a++) {
+          const k = aliases[a];
+          if (revObj && revObj[k] !== undefined && revObj[k] !== null && revObj[k] !== "") {
+            return revObj[k].toString().trim();
+          }
+          if (params && params[k] !== undefined && params[k] !== null && params[k] !== "") {
+            return params[k].toString().trim();
+          }
+        }
+        return "";
+      };
+
+      const kesan_terbaik = getText(["kesan_terbaik", "kesanTerbaik", "kesan", "kesan_terbaik_acara"]);
+      const hal_kurang = getText(["hal_kurang", "halKurang", "hal_perlu_diperbaiki", "halPerluDiperbaiki", "perlu_diperbaiki", "perluDiperbaiki", "kekurangan"]);
+      const usulan_kegiatan = getText(["usulan_kegiatan", "usulanKegiatan", "usulan_tema", "usulanTema", "usulan", "usulan_tema_kajian"]);
+
+      // 4. Pastikan kolom header tersedia di sheet penilaian_acara secara otomatis
+      let revHeaderMap = getHeaderMap(sheetReviews);
+      const ensureCol = (canonicalName, aliases) => {
+        for (let a = 0; a < aliases.length; a++) {
+          if (revHeaderMap[aliases[a]] !== undefined) return revHeaderMap[aliases[a]];
+        }
+        const newCol = sheetReviews.getLastColumn() + 1;
+        sheetReviews.getRange(1, newCol).setValue(canonicalName);
+        revHeaderMap[canonicalName] = newCol - 1;
+        return newCol - 1;
+      };
+
+      ensureCol("kesan_terbaik", ["kesan_terbaik", "kesan terbaik", "kesanterbaik", "kesan"]);
+      ensureCol("hal_kurang", ["hal_kurang", "hal kurang", "halkurang", "hal_perlu_diperbaiki", "hal perlu diperbaiki", "perlu_diperbaiki", "perlu diperbaiki"]);
+      ensureCol("usulan_kegiatan", ["usulan_kegiatan", "usulan kegiatan", "usulankegiatan", "usulan_tema", "usulan tema", "usulantema", "usulan"]);
+      ensureCol("submitted_at", ["submitted_at", "submitted at", "timestamp", "waktu", "tanggal"]);
+
       const nameColUser = userHeaderMap["nama"] !== undefined ? userHeaderMap["nama"] : 1;
       const userName = (userRows[userRowIdx - 1] && userRows[userRowIdx - 1][nameColUser]) || "Jamaah";
       const review_id = generateUUID();
 
-      sheetReviews.appendRow([
-        review_id,
-        user_id,
-        targetEvent.event_id,
-        userName,
-        targetEvent.nama_event,
-        skor_materi,
-        skor_kenyamanan,
-        skor_sound,
-        skor_panitia,
-        kesan_terbaik,
-        hal_kurang,
-        usulan_kegiatan,
-        scanned_at
-      ]);
+      // 5. Susun baris penilaian secara dinamis berdasarkan reviewHeaderMap
+      const totalReviewCols = Math.max(sheetReviews.getLastColumn(), 13);
+      const newReviewRow = new Array(totalReviewCols).fill("");
+
+      const fillCol = (val, preferredAliases, fallbackIdx) => {
+        let placed = false;
+        for (let a = 0; a < preferredAliases.length; a++) {
+          const colIdx = revHeaderMap[preferredAliases[a]];
+          if (colIdx !== undefined && colIdx < totalReviewCols) {
+            newReviewRow[colIdx] = val;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed && fallbackIdx < totalReviewCols && newReviewRow[fallbackIdx] === "") {
+          newReviewRow[fallbackIdx] = val;
+        }
+      };
+
+      fillCol(review_id, ["review_id", "review id", "id"], 0);
+      fillCol(user_id, ["user_id", "user id"], 1);
+      fillCol(targetEvent.event_id, ["event_id", "event id"], 2);
+      fillCol(userName, ["nama_jamaah", "nama jamaah", "nama", "jamaah"], 3);
+      fillCol(targetEvent.nama_event, ["nama_event", "nama event", "event"], 4);
+      fillCol(skor_materi, ["skor_materi", "skor materi", "materi"], 5);
+      fillCol(skor_kenyamanan, ["skor_kenyamanan", "skor kenyamanan", "kenyamanan", "lokasi"], 6);
+      fillCol(skor_sound, ["skor_sound", "skor sound", "sound", "suara"], 7);
+      fillCol(skor_panitia, ["skor_panitia", "skor panitia", "panitia"], 8);
+      fillCol(kesan_terbaik, ["kesan_terbaik", "kesan terbaik", "kesanterbaik", "kesan"], 9);
+      fillCol(hal_kurang, ["hal_kurang", "hal kurang", "halkurang", "hal_perlu_diperbaiki", "hal perlu diperbaiki", "perlu_diperbaiki", "perlu diperbaiki"], 10);
+      fillCol(usulan_kegiatan, ["usulan_kegiatan", "usulan kegiatan", "usulankegiatan", "usulan_tema", "usulan tema", "usulantema", "usulan"], 11);
+      fillCol(scanned_at, ["submitted_at", "submitted at", "timestamp", "waktu", "tanggal"], 12);
+
+      sheetReviews.appendRow(newReviewRow);
     }
     
     const successMsg = isRedeem
@@ -869,8 +1066,11 @@ function handleRouting(action, params) {
     const user_id = params.user_id;
     if (!user_id) return jsonResponse({ success: false, error: "User ID diperlukan" });
     
-    const sheetLogs = ss.getSheetByName("scan_log");
-    const sheetEvents = ss.getSheetByName("master_event");
+    const sheetLogs = getSheetCaseInsensitive(ss, "scan_log");
+    const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    if (!sheetLogs || !sheetEvents) {
+      return jsonResponse({ success: true, data: [] });
+    }
     
     const logRows = sheetLogs.getDataRange().getValues();
     const eventRows = sheetEvents.getDataRange().getValues();
@@ -986,23 +1186,35 @@ function handleRouting(action, params) {
 
   // 6. GET EVENTS (Admin & Home preview)
   if (action === "getEvents") {
-    const sheetEvents = ss.getSheetByName("master_event");
+    const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    if (!sheetEvents) {
+      return jsonResponse({ success: true, data: [] });
+    }
     const eventHeaderMap = getHeaderMap(sheetEvents);
     const eventRows = sheetEvents.getDataRange().getValues();
     const events = [];
 
-    const idIdx = eventHeaderMap["event_id"] !== undefined ? eventHeaderMap["event_id"] : 0;
-    const namaIdx = eventHeaderMap["nama_event"] !== undefined ? eventHeaderMap["nama_event"] : 1;
-    const tglIdx = eventHeaderMap["tanggal"] !== undefined ? eventHeaderMap["tanggal"] : 2;
-    const qrIdx = eventHeaderMap["qr_token"] !== undefined ? eventHeaderMap["qr_token"] : 3;
-    const poinIdx = eventHeaderMap["poin_value"] !== undefined ? eventHeaderMap["poin_value"] : 4;
-    const statusIdx = eventHeaderMap["status"] !== undefined ? eventHeaderMap["status"] : 5;
-    const pemateriIdx = eventHeaderMap["pemateri"];
-    const waktuIdx = eventHeaderMap["waktu"];
-    const lokasiIdx = eventHeaderMap["lokasi"];
-    const eventTypeIdx = eventHeaderMap["event_type"];
-    const kuotaIdx = eventHeaderMap["kuota"];
-    const createdIdx = eventHeaderMap["created_at"];
+    const getCol = (aliases, fallbackIdx) => {
+      for (let a = 0; a < aliases.length; a++) {
+        if (eventHeaderMap[aliases[a]] !== undefined) {
+          return eventHeaderMap[aliases[a]];
+        }
+      }
+      return fallbackIdx;
+    };
+
+    const idIdx = getCol(["event_id", "event id", "id"], 0);
+    const namaIdx = getCol(["nama_event", "nama event", "event", "nama"], 1);
+    const tglIdx = getCol(["tanggal", "tgl", "date"], 2);
+    const qrIdx = getCol(["qr_token", "qr token", "token"], 3);
+    const poinIdx = getCol(["poin_value", "poin value", "poin", "points"], 4);
+    const statusIdx = getCol(["status", "active"], 5);
+    const pemateriIdx = getCol(["pemateri", "narasumber", "ustadz"], 6);
+    const waktuIdx = getCol(["waktu", "jam"], 7);
+    const lokasiIdx = getCol(["lokasi", "tempat", "ruangan", "lokasi_acara", "lokasi acara", "venue"], 8);
+    const eventTypeIdx = getCol(["event_type", "event type", "tipe", "mode"], 9);
+    const kuotaIdx = getCol(["kuota", "quota", "limit"], 10);
+    const createdIdx = getCol(["created_at", "created at", "timestamp"], 11);
     
     for (let i = 1; i < eventRows.length; i++) {
       if (eventRows[i][idIdx]) {
@@ -1029,14 +1241,21 @@ function handleRouting(action, params) {
   
   // 7. ADD EVENT (Admin)
   if (action === "addEvent") {
+    let sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    if (!sheetEvents) {
+      sheetEvents = ss.insertSheet("master_event");
+      sheetEvents.appendRow(["event_id", "nama_event", "tanggal", "qr_token", "poin_value", "status", "pemateri", "waktu", "lokasi", "event_type", "kuota", "created_at"]);
+      SpreadsheetApp.flush();
+    }
+
     const nama_event = params.nama_event || "Kajian Rutin Masjid Al Hijrah";
     const tanggal = params.tanggal || new Date().toISOString().split("T")[0];
     const poin_value = Number(params.poin_value) || 25;
     const status = params.status || "active";
     const event_type = (params.event_type || "append").toString().toLowerCase().trim() === "redeem" ? "redeem" : "append";
-    const pemateri = (params.pemateri || "").toString().trim();
-    const waktu = (params.waktu || "").toString().trim();
-    const lokasi = (params.lokasi || "").toString().trim();
+    const pemateri = (params.pemateri || params.narasumber || params.ustadz || "").toString().trim();
+    const waktu = (params.waktu || params.jam || "").toString().trim();
+    const lokasi = (params.lokasi || params.tempat || params.ruangan || params.lokasi_acara || (event_type === "redeem" ? "Posko Penukaran / Sekretariat DKM" : "Ruang Utama Masjid Al Hijrah PTPP")).toString().trim();
     const kuota = params.kuota !== undefined && params.kuota !== "" ? Number(params.kuota) : "";
     
     // Generate secure random QR token (misal: HIJRAH-xxx-xxx)
@@ -1046,53 +1265,52 @@ function handleRouting(action, params) {
     const event_id = generateUUID();
     const created_at = new Date().toISOString();
     
-    const sheetEvents = ss.getSheetByName("master_event");
     const eventHeaderMap = getHeaderMap(sheetEvents);
+    let currentLastCol = sheetEvents.getLastColumn() || 1;
 
     // Pastikan kolom pemateri, waktu, lokasi, event_type, kuota tersedia di header tabel
-    if (eventHeaderMap["pemateri"] === undefined) {
-      const newCol = sheetEvents.getLastColumn() + 1;
-      sheetEvents.getRange(1, newCol).setValue("pemateri");
-      eventHeaderMap["pemateri"] = newCol - 1;
-    }
-    if (eventHeaderMap["waktu"] === undefined) {
-      const newCol = sheetEvents.getLastColumn() + 1;
-      sheetEvents.getRange(1, newCol).setValue("waktu");
-      eventHeaderMap["waktu"] = newCol - 1;
-    }
-    if (eventHeaderMap["lokasi"] === undefined) {
-      const newCol = sheetEvents.getLastColumn() + 1;
-      sheetEvents.getRange(1, newCol).setValue("lokasi");
-      eventHeaderMap["lokasi"] = newCol - 1;
-    }
-    if (eventHeaderMap["event_type"] === undefined) {
-      const newCol = sheetEvents.getLastColumn() + 1;
-      sheetEvents.getRange(1, newCol).setValue("event_type");
-      eventHeaderMap["event_type"] = newCol - 1;
-    }
-    if (eventHeaderMap["kuota"] === undefined) {
-      const newCol = sheetEvents.getLastColumn() + 1;
-      sheetEvents.getRange(1, newCol).setValue("kuota");
-      eventHeaderMap["kuota"] = newCol - 1;
-    }
+    const getColOrAdd = (canonicalName, aliases) => {
+      for (let a = 0; a < aliases.length; a++) {
+        if (eventHeaderMap[aliases[a]] !== undefined) {
+          return eventHeaderMap[aliases[a]];
+        }
+      }
+      currentLastCol++;
+      sheetEvents.getRange(1, currentLastCol).setValue(canonicalName);
+      eventHeaderMap[canonicalName] = currentLastCol - 1;
+      return currentLastCol - 1;
+    };
 
-    const totalCols = sheetEvents.getLastColumn();
+    const colEventId = getColOrAdd("event_id", ["event_id", "event id", "id"]);
+    const colNamaEvent = getColOrAdd("nama_event", ["nama_event", "nama event", "event", "nama"]);
+    const colTanggal = getColOrAdd("tanggal", ["tanggal", "tgl", "date"]);
+    const colQrToken = getColOrAdd("qr_token", ["qr_token", "qr token", "token"]);
+    const colPoinValue = getColOrAdd("poin_value", ["poin_value", "poin value", "poin", "points"]);
+    const colStatus = getColOrAdd("status", ["status", "active"]);
+    const colPemateri = getColOrAdd("pemateri", ["pemateri", "narasumber", "ustadz"]);
+    const colWaktu = getColOrAdd("waktu", ["waktu", "jam"]);
+    const colLokasi = getColOrAdd("lokasi", ["lokasi", "tempat", "ruangan", "lokasi_acara", "lokasi acara", "venue"]);
+    const colEventType = getColOrAdd("event_type", ["event_type", "event type", "tipe", "mode"]);
+    const colKuota = getColOrAdd("kuota", ["kuota", "quota", "limit"]);
+    const colCreatedAt = getColOrAdd("created_at", ["created_at", "created at", "timestamp"]);
+
+    SpreadsheetApp.flush();
+
+    const totalCols = Math.max(currentLastCol, 12);
     const rowData = new Array(totalCols).fill("");
 
-    rowData[eventHeaderMap["event_id"] !== undefined ? eventHeaderMap["event_id"] : 0] = event_id;
-    rowData[eventHeaderMap["nama_event"] !== undefined ? eventHeaderMap["nama_event"] : 1] = nama_event;
-    rowData[eventHeaderMap["tanggal"] !== undefined ? eventHeaderMap["tanggal"] : 2] = tanggal;
-    rowData[eventHeaderMap["qr_token"] !== undefined ? eventHeaderMap["qr_token"] : 3] = qr_token;
-    rowData[eventHeaderMap["poin_value"] !== undefined ? eventHeaderMap["poin_value"] : 4] = poin_value;
-    rowData[eventHeaderMap["status"] !== undefined ? eventHeaderMap["status"] : 5] = status;
-    rowData[eventHeaderMap["pemateri"]] = pemateri;
-    rowData[eventHeaderMap["waktu"]] = waktu;
-    rowData[eventHeaderMap["lokasi"]] = lokasi;
-    rowData[eventHeaderMap["event_type"]] = event_type;
-    rowData[eventHeaderMap["kuota"]] = kuota;
-    if (eventHeaderMap["created_at"] !== undefined) {
-      rowData[eventHeaderMap["created_at"]] = created_at;
-    }
+    rowData[colEventId] = event_id;
+    rowData[colNamaEvent] = nama_event;
+    rowData[colTanggal] = tanggal;
+    rowData[colQrToken] = qr_token;
+    rowData[colPoinValue] = poin_value;
+    rowData[colStatus] = status;
+    rowData[colPemateri] = pemateri;
+    rowData[colWaktu] = waktu;
+    rowData[colLokasi] = lokasi;
+    rowData[colEventType] = event_type;
+    rowData[colKuota] = kuota;
+    rowData[colCreatedAt] = created_at;
 
     sheetEvents.appendRow(rowData);
     
@@ -1115,12 +1333,38 @@ function handleRouting(action, params) {
       }
     });
   }
+
+  // 7.5 TOGGLE EVENT STATUS (Admin)
+  if (action === "toggleEventStatus") {
+    const event_id = params.event_id;
+    if (!event_id) return jsonResponse({ success: false, error: "Event ID diperlukan" });
+    const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    if (!sheetEvents) return jsonResponse({ success: false, error: "Tabel master_event tidak ditemukan" });
+    const eventHeaderMap = getHeaderMap(sheetEvents);
+    const data = sheetEvents.getDataRange().getValues();
+    const idCol = eventHeaderMap["event_id"] !== undefined ? eventHeaderMap["event_id"] : 0;
+    const statusCol = eventHeaderMap["status"] !== undefined ? eventHeaderMap["status"] : 5;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idCol] === event_id) {
+        const current = (data[i][statusCol] || "active").toString().toLowerCase().trim();
+        const nextStatus = current === "active" ? "inactive" : "active";
+        sheetEvents.getRange(i + 1, statusCol + 1).setValue(nextStatus);
+        return jsonResponse({
+          success: true,
+          message: "Status event berhasil diubah",
+          data: { event_id: event_id, status: nextStatus }
+        });
+      }
+    }
+    return jsonResponse({ success: false, error: "Event tidak ditemukan" });
+  }
   
   // 8. GET ALL LOGS (Admin rekap)
   if (action === "getAllLogs") {
-    const sheetLogs = ss.getSheetByName("scan_log");
-    const sheetEvents = ss.getSheetByName("master_event");
-    const sheetUsers = ss.getSheetByName("users");
+    const sheetLogs = getSheetCaseInsensitive(ss, "scan_log");
+    const sheetEvents = getSheetCaseInsensitive(ss, "master_event");
+    const sheetUsers = getSheetCaseInsensitive(ss, "users");
 
     if (!sheetLogs || !sheetEvents || !sheetUsers) {
       return jsonResponse({ success: true, data: [] });
@@ -1259,7 +1503,7 @@ function handleRouting(action, params) {
 
   // 10. GET REVIEWS / PENILAIAN ACARA (Admin)
   if (action === "getReviews") {
-    const sheetReviews = ss.getSheetByName("penilaian_acara");
+    const sheetReviews = getSheetCaseInsensitive(ss, "penilaian_acara");
     if (!sheetReviews) {
       return jsonResponse({ success: true, data: [] });
     }
@@ -1268,27 +1512,167 @@ function handleRouting(action, params) {
       return jsonResponse({ success: true, data: [] });
     }
     const reviewHeaderMap = getHeaderMap(sheetReviews);
+
+    const getCol = (aliases, fallbackIdx) => {
+      for (let a = 0; a < aliases.length; a++) {
+        if (reviewHeaderMap[aliases[a]] !== undefined) {
+          return reviewHeaderMap[aliases[a]];
+        }
+      }
+      return fallbackIdx;
+    };
+
+    const colRevId = getCol(["review_id", "review id", "id"], 0);
+    const colUserId = getCol(["user_id", "user id"], 1);
+    const colEvtId = getCol(["event_id", "event id"], 2);
+    const colNama = getCol(["nama_jamaah", "nama jamaah", "nama", "jamaah"], 3);
+    const colEvtNama = getCol(["nama_event", "nama event", "event"], 4);
+    const colMateri = getCol(["skor_materi", "skor materi", "materi"], 5);
+    const colLokasi = getCol(["skor_kenyamanan", "skor kenyamanan", "kenyamanan", "lokasi"], 6);
+    const colSound = getCol(["skor_sound", "skor sound", "sound", "suara"], 7);
+    const colPanitia = getCol(["skor_panitia", "skor panitia", "panitia"], 8);
+    const colKesan = getCol(["kesan_terbaik", "kesan terbaik", "kesanterbaik", "kesan"], 9);
+    const colKurang = getCol(["hal_kurang", "hal kurang", "halkurang", "hal_perlu_diperbaiki", "hal perlu diperbaiki", "perlu_diperbaiki", "perlu diperbaiki"], 10);
+    const colUsulan = getCol(["usulan_kegiatan", "usulan kegiatan", "usulankegiatan", "usulan_tema", "usulan tema", "usulantema", "usulan"], 11);
+    const colSubmitted = getCol(["submitted_at", "submitted at", "timestamp", "waktu", "tanggal"], 12);
+
     const reviewsList = [];
     for (let i = 1; i < data.length; i++) {
       reviewsList.push({
-        review_id: (data[i][reviewHeaderMap["review_id"] !== undefined ? reviewHeaderMap["review_id"] : 0] || "").toString(),
-        user_id: (data[i][reviewHeaderMap["user_id"] !== undefined ? reviewHeaderMap["user_id"] : 1] || "").toString(),
-        event_id: (data[i][reviewHeaderMap["event_id"] !== undefined ? reviewHeaderMap["event_id"] : 2] || "").toString(),
-        nama_jamaah: (data[i][reviewHeaderMap["nama_jamaah"] !== undefined ? reviewHeaderMap["nama_jamaah"] : 3] || "").toString(),
-        nama_event: (data[i][reviewHeaderMap["nama_event"] !== undefined ? reviewHeaderMap["nama_event"] : 4] || "").toString(),
-        skor_materi: Number(data[i][reviewHeaderMap["skor_materi"] !== undefined ? reviewHeaderMap["skor_materi"] : 5]) || 5,
-        skor_kenyamanan: Number(data[i][reviewHeaderMap["skor_kenyamanan"] !== undefined ? reviewHeaderMap["skor_kenyamanan"] : 6]) || 5,
-        skor_sound: Number(data[i][reviewHeaderMap["skor_sound"] !== undefined ? reviewHeaderMap["skor_sound"] : 7]) || 5,
-        skor_panitia: Number(data[i][reviewHeaderMap["skor_panitia"] !== undefined ? reviewHeaderMap["skor_panitia"] : 8]) || 5,
-        kesan_terbaik: (data[i][reviewHeaderMap["kesan_terbaik"] !== undefined ? reviewHeaderMap["kesan_terbaik"] : 9] || "").toString(),
-        hal_kurang: (data[i][reviewHeaderMap["hal_kurang"] !== undefined ? reviewHeaderMap["hal_kurang"] : 10] || "").toString(),
-        usulan_kegiatan: (data[i][reviewHeaderMap["usulan_kegiatan"] !== undefined ? reviewHeaderMap["usulan_kegiatan"] : 11] || "").toString(),
-        submitted_at: (data[i][reviewHeaderMap["submitted_at"] !== undefined ? reviewHeaderMap["submitted_at"] : 12] || "").toString()
+        review_id: (data[i][colRevId] || "").toString(),
+        user_id: (data[i][colUserId] || "").toString(),
+        event_id: (data[i][colEvtId] || "").toString(),
+        nama_jamaah: (data[i][colNama] || "").toString(),
+        nama_event: (data[i][colEvtNama] || "").toString(),
+        skor_materi: Number(data[i][colMateri]) || 5,
+        skor_kenyamanan: Number(data[i][colLokasi]) || 5,
+        skor_sound: Number(data[i][colSound]) || 5,
+        skor_panitia: Number(data[i][colPanitia]) || 5,
+        kesan_terbaik: (data[i][colKesan] || "").toString(),
+        hal_kurang: (data[i][colKurang] || "").toString(),
+        usulan_kegiatan: (data[i][colUsulan] || "").toString(),
+        submitted_at: (data[i][colSubmitted] || "").toString()
       });
     }
     // Sort descending by submitted_at
     reviewsList.reverse();
     return jsonResponse({ success: true, data: reviewsList });
+  }
+
+  // 11. GET VIDEOS (User & Admin)
+  if (action === "getVideos") {
+    let sheetVideos = getSheetCaseInsensitive(ss, "videos");
+    if (!sheetVideos) {
+      return jsonResponse({ success: true, data: [] });
+    }
+    const data = sheetVideos.getDataRange().getValues();
+    if (data.length <= 1) {
+      return jsonResponse({ success: true, data: [] });
+    }
+    const videoHeaderMap = getHeaderMap(sheetVideos);
+
+    const getCol = (aliases, fallbackIdx) => {
+      for (let a = 0; a < aliases.length; a++) {
+        if (videoHeaderMap[aliases[a]] !== undefined) {
+          return videoHeaderMap[aliases[a]];
+        }
+      }
+      return fallbackIdx;
+    };
+
+    const colId = getCol(["video_id", "video id", "id"], 0);
+    const colTitle = getCol(["title", "judul", "nama_video", "nama video"], 1);
+    const colDesc = getCol(["description", "deskripsi", "desc", "keterangan"], 2);
+    const colUrl = getCol(["youtube_url", "youtube url", "link", "url"], 3);
+    const colCreated = getCol(["created_at", "created at", "timestamp", "tanggal"], 4);
+    const colStatus = getCol(["status", "aktif"], 5);
+
+    const videosList = [];
+    for (let i = 1; i < data.length; i++) {
+      const vidId = (data[i][colId] || "").toString().trim();
+      const status = (data[i][colStatus] || "active").toString().toLowerCase().trim();
+      if (vidId && status !== "inactive") {
+        const rawUrl = (data[i][colUrl] || "").toString().trim();
+        const ytId = extractYouTubeIdGAS(rawUrl);
+
+        videosList.push({
+          video_id: vidId,
+          title: (data[i][colTitle] || "").toString(),
+          description: (data[i][colDesc] || "").toString(),
+          youtube_url: rawUrl,
+          youtube_id: ytId,
+          created_at: (data[i][colCreated] || "").toString(),
+          status: status
+        });
+      }
+    }
+    // Sort descending by created_at
+    videosList.reverse();
+    return jsonResponse({ success: true, data: videosList });
+  }
+
+  // 12. ADD VIDEO (Admin)
+  if (action === "addVideo") {
+    let sheetVideos = getSheetCaseInsensitive(ss, "videos");
+    if (!sheetVideos) {
+      sheetVideos = ss.insertSheet("videos");
+      sheetVideos.appendRow(["video_id", "title", "description", "youtube_url", "created_at", "status"]);
+      SpreadsheetApp.flush();
+    }
+
+    const title = (params.title || params.judul || "").toString().trim();
+    const description = (params.description || params.deskripsi || params.desc || "").toString().trim();
+    const youtube_url = (params.youtube_url || params.link || "").toString().trim();
+    let youtube_id = (params.youtube_id || "").toString().trim();
+
+    if (!title) return jsonResponse({ success: false, error: "Judul video wajib diisi" });
+    if (!youtube_url) return jsonResponse({ success: false, error: "Link YouTube wajib diisi" });
+
+    if (!youtube_id) {
+      youtube_id = extractYouTubeIdGAS(youtube_url);
+    }
+
+    const video_id = generateUUID();
+    const created_at = new Date().toISOString();
+    const status = "active";
+
+    sheetVideos.appendRow([video_id, title, description, youtube_url, created_at, status]);
+    SpreadsheetApp.flush();
+
+    return jsonResponse({
+      success: true,
+      message: "Video kajian berhasil ditambahkan",
+      data: {
+        video_id: video_id,
+        title: title,
+        description: description,
+        youtube_url: youtube_url,
+        youtube_id: youtube_id,
+        created_at: created_at,
+        status: status
+      }
+    });
+  }
+
+  // 13. DELETE VIDEO (Admin)
+  if (action === "deleteVideo") {
+    const video_id = params.video_id;
+    if (!video_id) return jsonResponse({ success: false, error: "Video ID diperlukan" });
+    const sheetVideos = getSheetCaseInsensitive(ss, "videos");
+    if (!sheetVideos) return jsonResponse({ success: false, error: "Tabel videos tidak ditemukan" });
+    const data = sheetVideos.getDataRange().getValues();
+    const videoHeaderMap = getHeaderMap(sheetVideos);
+    const idCol = videoHeaderMap["video_id"] !== undefined ? videoHeaderMap["video_id"] : 0;
+    const statusCol = videoHeaderMap["status"] !== undefined ? videoHeaderMap["status"] : 5;
+
+    for (let i = 1; i < data.length; i++) {
+      if ((data[i][idCol] || "").toString().trim() === video_id.trim()) {
+        sheetVideos.getRange(i + 1, statusCol + 1).setValue("inactive");
+        SpreadsheetApp.flush();
+        return jsonResponse({ success: true, message: "Video berhasil dihapus" });
+      }
+    }
+    return jsonResponse({ success: false, error: "Video tidak ditemukan" });
   }
   
   return jsonResponse({ success: false, error: "Aksi '" + action + "' tidak dikenali" });

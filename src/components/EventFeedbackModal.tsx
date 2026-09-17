@@ -46,6 +46,8 @@ export const EventFeedbackModal: React.FC<EventFeedbackModalProps> = ({
       kesan_terbaik: kesanTerbaik.trim(),
       hal_kurang: halKurang.trim(),
       usulan_kegiatan: usulanKegiatan.trim(),
+      hal_perlu_diperbaiki: halKurang.trim(),
+      usulan_tema: usulanKegiatan.trim(),
     });
   };
 

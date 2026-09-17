@@ -122,7 +122,29 @@ export interface EventReview {
   kesan_terbaik?: string;   // Teks paragraf: Hal paling disukai dari acara
   hal_kurang?: string;      // Teks paragraf: Hal yang dirasa kurang & perlu diperbaiki
   usulan_kegiatan?: string; // Teks paragraf: Usulan tema/narasumber/kegiatan mendatang
+  hal_perlu_diperbaiki?: string; // Alias untuk hal_kurang
+  usulan_tema?: string;          // Alias untuk usulan_kegiatan
   submitted_at: string;     // Timestamp submit review (ISO 8601)
+}
+
+/**
+ * Tabel: `videos`
+ * Menyimpan data video embed YouTube kajian Masjid Al Hijrah
+ */
+export interface VideoItem {
+  video_id: string;        // Primary Key unik video (contoh: 'vid_1712000001')
+  title: string;           // Judul kajian video
+  description: string;     // Deskripsi / ringkasan materi video
+  youtube_url: string;     // Link URL asli YouTube
+  youtube_id: string;      // ID video 11 karakter YouTube
+  created_at: string;      // Timestamp penambahan (ISO 8601)
+  status?: 'active' | 'inactive'; // Status tayang video
+}
+
+export interface VideoInput {
+  title: string;
+  description: string;
+  youtube_url: string;
 }
 
 /**
@@ -136,6 +158,8 @@ export interface EventReviewInput {
   kesan_terbaik?: string;
   hal_kurang?: string;
   usulan_kegiatan?: string;
+  hal_perlu_diperbaiki?: string;
+  usulan_tema?: string;
 }
 
 /**
@@ -223,6 +247,15 @@ export const PENILAIAN_ACARA_TABLE_HEADERS = [
   'hal_kurang',
   'usulan_kegiatan',
   'submitted_at',
+] as const;
+
+export const VIDEOS_TABLE_HEADERS = [
+  'video_id',
+  'title',
+  'description',
+  'youtube_url',
+  'created_at',
+  'status',
 ] as const;
 
 // ----------------------------------------------------------------------------
@@ -383,6 +416,26 @@ export const UNIT_SCHEMA: TableStructureMeta = {
 };
 
 /**
+ * Metadata Lengkap Tabel 7: `videos`
+ */
+export const VIDEOS_SCHEMA: TableStructureMeta = {
+  tableName: 'videos',
+  sheetName: 'videos',
+  displayName: 'Tabel Video Kajian (videos)',
+  description: 'Menyimpan daftar video embed YouTube kajian Masjid Al Hijrah yang ditambahkan dari panel admin.',
+  primaryKey: 'video_id',
+  headers: VIDEOS_TABLE_HEADERS as any,
+  columns: [
+    { field: 'video_id', header: 'video_id', type: 'string', required: true, description: 'ID unik video (Primary Key)', example: 'vid_1712000001' },
+    { field: 'title', header: 'title', type: 'string', required: true, description: 'Judul video / kajian', example: 'Kajian Fiqih Muamalah: Berkah Rezeki' },
+    { field: 'description', header: 'description', type: 'text', required: false, description: 'Deskripsi / ringkasan video', example: 'Penjelasan fiqih praktis dalam berbisnis dan bekerja.' },
+    { field: 'youtube_url', header: 'youtube_url', type: 'string', required: true, description: 'Link video YouTube asli', example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
+    { field: 'created_at', header: 'created_at', type: 'datetime', required: true, description: 'Waktu penambahan video (ISO 8601)', example: '2026-09-16T10:00:00.000Z' },
+    { field: 'status', header: 'status', type: 'enum', required: false, description: 'Status tayang video (active / inactive)', example: 'active', options: ['active', 'inactive'] },
+  ],
+};
+
+/**
  * Daftar Seluruh Skema Tabel (Dictionary & Array)
  */
 export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
@@ -392,6 +445,7 @@ export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
   PENILAIAN_ACARA_SCHEMA,
   COMPANY_SCHEMA,
   UNIT_SCHEMA,
+  VIDEOS_SCHEMA,
 ];
 
 export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
@@ -401,4 +455,5 @@ export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
   penilaian_acara: PENILAIAN_ACARA_SCHEMA,
   company: COMPANY_SCHEMA,
   unit: UNIT_SCHEMA,
+  videos: VIDEOS_SCHEMA,
 };

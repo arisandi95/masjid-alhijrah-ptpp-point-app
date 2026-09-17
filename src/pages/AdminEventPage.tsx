@@ -31,18 +31,23 @@ import {
   Star,
   MessageSquareHeart,
   Lightbulb,
+  Video as VideoIcon,
+  Trash2,
+  Play,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { MasterEvent, ScanLog, User, EventReview, ALL_DATABASE_SCHEMAS } from '../types';
-import { getGasUrl, setGasUrl } from '../services/mockStorage';
+import { MasterEvent, ScanLog, User, EventReview, VideoItem, ALL_DATABASE_SCHEMAS } from '../types';
+import { getGasUrl, setGasUrl, getEnvGasUrl, getCustomGasUrl, resetGasUrl } from '../services/mockStorage';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../services/gasScript';
+import { extractYouTubeId, getYouTubeThumbnail, getYouTubeEmbedUrl } from '../utils/youtubeUtils';
 
 export const AdminEventPage: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'events' | 'penilaian' | 'rekap' | 'sheets'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'videos' | 'penilaian' | 'rekap' | 'sheets'>('events');
   const [eventViewMode, setEventViewMode] = useState<'table' | 'cards'>('table');
   const [events, setEvents] = useState<MasterEvent[]>([]);
+  const [videos, setVideos] = useState<VideoItem[]>([]);
   const [allLogs, setAllLogs] = useState<ScanLog[]>([]);
   const [leaderboard, setLeaderboard] = useState<User[]>([]);
   const [reviews, setReviews] = useState<EventReview[]>([]);
@@ -50,6 +55,16 @@ export const AdminEventPage: React.FC = () => {
   const [selectedSchemaTable, setSelectedSchemaTable] = useState<string>('users');
   const [copiedSchemaHeaders, setCopiedSchemaHeaders] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Video Management State
+  const [showAddVideoModal, setShowAddVideoModal] = useState(false);
+  const [newVideoTitle, setNewVideoTitle] = useState('');
+  const [newVideoDesc, setNewVideoDesc] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [submittingVideo, setSubmittingVideo] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [previewVideo, setPreviewVideo] = useState<VideoItem | null>(null);
+  const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
 
   // Modal QR & New Event
   const [selectedQR, setSelectedQR] = useState<MasterEvent | null>(null);
@@ -69,26 +84,35 @@ export const AdminEventPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Google Sheets Config State
-  const isGasUrlEnvLocked = !!(import.meta.env.VITE_GAS_URL || import.meta.env.GAS_URL);
-  const [gasUrlInput, setGasUrlInput] = useState(getGasUrl());
+  const envGasUrl = getEnvGasUrl();
+  const [gasUrlInput, setGasUrlInput] = useState(getCustomGasUrl());
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [testingConnection, setTestingConnection] = useState(false);
+
+  // Sinkronisasi input dengan custom GAS URL saat tab sheets dibuka
+  useEffect(() => {
+    if (activeTab === 'sheets') {
+      setGasUrlInput(getCustomGasUrl());
+    }
+  }, [activeTab]);
 
   // Fetch initial data
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [eventsRes, logsRes, leaderRes, reviewsRes] = await Promise.all([
+      const [eventsRes, logsRes, leaderRes, reviewsRes, videosRes] = await Promise.all([
         api.getEvents(),
         api.getAllLogs(),
         api.getLeaderboard(),
         api.getAllReviews(),
+        api.getVideos(),
       ]);
 
       if (eventsRes.success && eventsRes.data) setEvents(eventsRes.data);
       if (logsRes.success && logsRes.data) setAllLogs(logsRes.data);
       if (leaderRes.success && leaderRes.data) setLeaderboard(leaderRes.data);
       if (reviewsRes.success && reviewsRes.data) setReviews(reviewsRes.data);
+      if (videosRes.success && videosRes.data) setVideos(videosRes.data);
     } finally {
       setLoading(false);
     }
@@ -98,6 +122,70 @@ export const AdminEventPage: React.FC = () => {
     fetchData();
   }, []);
 
+  // Handle Add Video (Admin)
+  const handleAddVideo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVideoError(null);
+
+    const title = newVideoTitle.trim();
+    const desc = newVideoDesc.trim();
+    const url = newVideoUrl.trim();
+
+    if (!title) {
+      setVideoError('Judul video wajib diisi.');
+      return;
+    }
+    if (!url) {
+      setVideoError('Link YouTube wajib diisi.');
+      return;
+    }
+
+    const ytId = extractYouTubeId(url);
+    if (!ytId) {
+      setVideoError('Format link YouTube tidak valid. Gunakan format seperti https://www.youtube.com/watch?v=... atau https://youtu.be/...');
+      return;
+    }
+
+    setSubmittingVideo(true);
+    try {
+      const res = await api.addVideo({
+        title,
+        description: desc,
+        youtube_url: url,
+      });
+
+      if (res.success && res.data) {
+        setVideos((prev) => [res.data!, ...prev]);
+        setShowAddVideoModal(false);
+        setNewVideoTitle('');
+        setNewVideoDesc('');
+        setNewVideoUrl('');
+      } else {
+        setVideoError(res.error || 'Gagal menambahkan video kajian.');
+      }
+    } catch (err: any) {
+      setVideoError(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setSubmittingVideo(false);
+    }
+  };
+
+  // Handle Delete Video (Admin)
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus video kajian ini?')) return;
+    setDeletingVideoId(videoId);
+    try {
+      const res = await api.deleteVideo(videoId);
+      if (res.success) {
+        setVideos((prev) => prev.filter((v) => v.video_id !== videoId));
+      } else {
+        alert(res.error || 'Gagal menghapus video.');
+      }
+    } finally {
+      setDeletingVideoId(null);
+    }
+  };
+
   // Handle Create Event
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,13 +194,14 @@ export const AdminEventPage: React.FC = () => {
     setSubmitting(true);
     try {
       const kuotaNum = newKuota.trim() ? Number(newKuota) : undefined;
+      const finalLokasi = newLokasi.trim() || (newEventType === 'redeem' ? 'Posko Penukaran / Sekretariat DKM' : 'Ruang Utama Masjid Al Hijrah PTPP');
       const res = await api.addEvent({
         nama_event: newNama.trim(),
         tanggal: newTanggal,
         poin_value: Number(newPoin) || 25,
         event_type: newEventType,
         pemateri: newPemateri.trim(),
-        lokasi: newLokasi.trim(),
+        lokasi: finalLokasi,
         waktu: newWaktu.trim(),
         kuota: kuotaNum,
       });
@@ -127,6 +216,8 @@ export const AdminEventPage: React.FC = () => {
         setNewPemateri('');
         setNewEventType('append');
         setNewKuota('');
+        setNewLokasi('Ruang Utama Masjid Al Hijrah PTPP');
+        setNewWaktu("Ba'da Maghrib (18:30 WIB)");
       }
     } finally {
       setSubmitting(false);
@@ -160,7 +251,9 @@ export const AdminEventPage: React.FC = () => {
     setTestingConnection(true);
     setTestResult(null);
     try {
-      const res = await api.testConnection(gasUrlInput.trim());
+      // Jika input diisi: tes URL dari form. Jika input kosong: tes URL dari env Vercel "GAS_URL"
+      const urlToTest = gasUrlInput.trim() || envGasUrl;
+      const res = await api.testConnection(urlToTest);
       setTestResult(res);
       if (res.success) {
         setGasUrl(gasUrlInput.trim());
@@ -173,11 +266,21 @@ export const AdminEventPage: React.FC = () => {
 
   // Save GAS URL
   const handleSaveGasUrl = () => {
-    setGasUrl(gasUrlInput.trim());
-    setTestResult({
-      success: true,
-      message: 'Pengaturan URL tersimpan. Sistem akan otomatis memprioritaskan Google Sheets!',
-    });
+    const trimmed = gasUrlInput.trim();
+    setGasUrl(trimmed);
+    if (trimmed) {
+      setTestResult({
+        success: true,
+        message: 'URL dari formulir ini berhasil disimpan! Aplikasi kini menggunakan URL kustom ini.',
+      });
+    } else {
+      setTestResult({
+        success: true,
+        message: envGasUrl
+          ? 'Input dikosongkan. Sistem sekarang otomatis mengambil dari env Vercel ("GAS_URL").'
+          : 'Input dikosongkan. Belum ada env Vercel yang terdeteksi (mode offline lokal).',
+      });
+    }
     fetchData();
   };
 
@@ -244,9 +347,9 @@ export const AdminEventPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Tabs Navigation (Spacious, Modern Dashboard Cards - 2x2 on Mobile, 4 Cols on Desktop) */}
+      {/* Tabs Navigation (Spacious, Modern Dashboard Cards - 5 Tabs) */}
       <div className="bg-[#F8FAF8] p-2.5 sm:p-3 rounded-2xl border border-gray-200/85 shadow-2xs">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
           {/* Tab 1: Kajian & QR */}
           <button
             type="button"
@@ -291,6 +394,54 @@ export const AdminEventPage: React.FC = () => {
                 }`}
               >
                 Agenda & Barcode
+              </span>
+            </div>
+          </button>
+
+          {/* Tab 2: Video Kajian (YouTube) */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('videos')}
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
+              activeTab === 'videos'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'videos'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-red-50 text-red-600 group-hover:bg-red-100/80'
+                }`}
+              >
+                <VideoIcon className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                  activeTab === 'videos'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-[#4A5568] group-hover:bg-[#E8F3EE] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                {videos.length}
+              </span>
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'videos' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Video Kajian
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'videos' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Embed YouTube
               </span>
             </div>
           </button>
@@ -740,6 +891,157 @@ export const AdminEventPage: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: VIDEO KAJIAN (YOUTUBE) */}
+      {activeTab === 'videos' && (
+        <div className="space-y-4">
+          {/* Header & Add Button */}
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-white p-3.5 sm:p-4 rounded-2xl border border-gray-100 shadow-2xs">
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-[#1F2A24] font-heading flex items-center gap-1.5">
+                <VideoIcon className="w-4 h-4 text-red-600" />
+                Kelola Video Kajian ({videos.length})
+              </h3>
+              <p className="text-[10px] sm:text-[11px] text-[#6B7568] mt-0.5">
+                Admin cukup mengisi judul, deskripsi, dan link YouTube. Jamaah dapat menonton langsung di aplikasi.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setVideoError(null);
+                setNewVideoTitle('');
+                setNewVideoDesc('');
+                setNewVideoUrl('');
+                setShowAddVideoModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F6B4C] hover:bg-[#0c593f] text-white text-xs font-semibold shadow-xs transition active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Video</span>
+            </button>
+          </div>
+
+          {/* Videos List */}
+          {videos.length === 0 ? (
+            <div className="bg-white rounded-3xl p-8 border border-gray-100 text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+                <VideoIcon className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-[#1F2A24] font-heading">
+                  Belum Ada Video Kajian
+                </h4>
+                <p className="text-xs text-[#6B7568] max-w-sm mx-auto leading-relaxed">
+                  Tambahkan rekaman kajian YouTube pertama agar jamaah dapat belajar materi tausiyah secara online.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setVideoError(null);
+                  setShowAddVideoModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold hover:bg-[#0c593f] transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Video Sekarang</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {videos.map((vid) => {
+                const ytId = extractYouTubeId(vid.youtube_url);
+                const thumb = ytId ? getYouTubeThumbnail(ytId, 'hq') : null;
+
+                return (
+                  <div
+                    key={vid.video_id}
+                    className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-2xs hover:shadow-sm transition flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Thumbnail Preview with Play overlay */}
+                      <div
+                        onClick={() => setPreviewVideo(vid)}
+                        className="relative aspect-video w-full bg-black cursor-pointer group overflow-hidden"
+                      >
+                        {thumb ? (
+                          <img
+                            src={thumb}
+                            alt={vid.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gray-900 text-gray-400">
+                            <VideoIcon className="w-8 h-8" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+                          <div className="w-11 h-11 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <Play className="w-5 h-5 fill-current ml-0.5" />
+                          </div>
+                        </div>
+                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-white text-[10px] font-semibold">
+                          YouTube
+                        </span>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-3.5 space-y-2">
+                        <h4
+                          onClick={() => setPreviewVideo(vid)}
+                          className="font-bold text-xs sm:text-[13px] text-[#1F2A24] line-clamp-2 hover:text-[#0F6B4C] cursor-pointer transition leading-snug"
+                        >
+                          {vid.title}
+                        </h4>
+                        <p className="text-[11px] text-[#6B7568] line-clamp-2 leading-relaxed">
+                          {vid.description || 'Tidak ada deskripsi.'}
+                        </p>
+
+                        <div className="pt-1 flex items-center justify-between gap-2 text-[10px] text-[#6B7568]">
+                          <span className="truncate max-w-[170px] text-gray-400">
+                            {vid.youtube_url}
+                          </span>
+                          <a
+                            href={vid.youtube_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#0F6B4C] hover:underline flex items-center gap-0.5 shrink-0 font-medium"
+                          >
+                            <span>Buka YouTube</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="p-3 bg-[#FAFAF7] border-t border-gray-100 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => setPreviewVideo(vid)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-[#0F6B4C] hover:text-[#0c593f] cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Preview Video</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteVideo(vid.video_id)}
+                        disabled={deletingVideoId === vid.video_id}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-red-600 hover:bg-red-50 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+                        title="Hapus Video"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>{deletingVideoId === vid.video_id ? 'Menghapus...' : 'Hapus'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TAB 2: PENILAIAN ACARA (FEEDBACK & EVALUASI JAMAAH) */}
       {activeTab === 'penilaian' && (
         <div className="space-y-4">
@@ -899,18 +1201,18 @@ export const AdminEventPage: React.FC = () => {
                         </div>
                       )}
 
-                      {rev.hal_kurang && (
+                      {(rev.hal_kurang || rev.hal_perlu_diperbaiki) && (
                         <div className="p-2.5 rounded-xl bg-amber-50/60 border border-amber-100">
                           <span className="font-bold text-[11px] text-amber-800 block mb-0.5">
                             Hal yang Perlu Diperbaiki:
                           </span>
                           <p className="text-[#1F2A24] text-[11px] leading-relaxed">
-                            {rev.hal_kurang}
+                            {rev.hal_kurang || rev.hal_perlu_diperbaiki}
                           </p>
                         </div>
                       )}
 
-                      {rev.usulan_kegiatan && (
+                      {(rev.usulan_kegiatan || rev.usulan_tema) && (
                         <div className="p-2.5 rounded-xl bg-sky-50/60 border border-sky-100 flex items-start gap-2">
                           <Lightbulb className="w-3.5 h-3.5 text-sky-600 shrink-0 mt-0.5" />
                           <div>
@@ -918,7 +1220,7 @@ export const AdminEventPage: React.FC = () => {
                               Usulan Tema / Narasumber / Kegiatan:
                             </span>
                             <p className="text-[#1F2A24] text-[11px] leading-relaxed">
-                              {rev.usulan_kegiatan}
+                              {rev.usulan_kegiatan || rev.usulan_tema}
                             </p>
                           </div>
                         </div>
@@ -946,32 +1248,95 @@ export const AdminEventPage: React.FC = () => {
               Database tersinkronisasi otomatis dengan 4 sheet di Google Sheets (<code>users</code>, <code>master_event</code>, <code>scan_log</code>, dan <code>penilaian_acara</code>) yang dihubungkan melalui Web App Google Apps Script.
             </p>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
-                URL Google Apps Script Web App (akhiran /exec)
-              </label>
-              <input
-                type="url"
-                value={gasUrlInput}
-                onChange={(e) => setGasUrlInput(e.target.value)}
-                disabled={isGasUrlEnvLocked}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] bg-[#FAFAF7] disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-              <span className="text-[10px] text-[#6B7568] mt-1 block">
-                {isGasUrlEnvLocked 
-                  ? '🔒 URL Google Sheets dikonfigurasi melalui Environment Variable pada Vercel. Seluruh perangkat otomatis terhubung ke URL ini.'
-                  : gasUrlInput
-                    ? 'Mode Terhubung: Permintaan API akan diarahkan ke Google Sheets Anda.'
-                    : 'Mode Standby / Offline: Saat ini data disimpan di penyimpanan lokal browser.'}
-              </span>
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1F2A24]">
+                    URL Google Apps Script Web App (akhiran /exec)
+                  </label>
+                  {envGasUrl ? (
+                    <span className="text-[10px] text-emerald-700 font-medium bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Vercel env "GAS_URL" tersedia
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full border border-gray-200">
+                      env Vercel belum diset
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  value={gasUrlInput}
+                  onChange={(e) => setGasUrlInput(e.target.value)}
+                  placeholder={envGasUrl ? `Default dari Vercel: ${envGasUrl}` : 'https://script.google.com/macros/s/.../exec'}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] bg-white font-mono"
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-1 mt-1.5">
+                  <span className="text-[10px]">
+                    {gasUrlInput.trim() ? (
+                      <span className="text-amber-800 font-medium">
+                        ⚙️ Input terisi: Menggunakan URL dari form ini.
+                      </span>
+                    ) : envGasUrl ? (
+                      <span className="text-emerald-700 font-medium">
+                        ✓ Input kosong: Otomatis mengambil dari env Vercel ("GAS_URL").
+                      </span>
+                    ) : (
+                      <span className="text-[#6B7568]">
+                        Input kosong: Belum ada env Vercel (mode offline lokal).
+                      </span>
+                    )}
+                  </span>
+                  {gasUrlInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetGasUrl();
+                        setGasUrlInput('');
+                        setTestResult({
+                          success: true,
+                          message: envGasUrl
+                            ? 'Input dikosongkan. Otomatis beralih menggunakan env Vercel ("GAS_URL").'
+                            : 'Input dikosongkan. Kembali ke mode offline lokal.',
+                        });
+                        fetchData();
+                      }}
+                      className="text-[10px] text-[#0F6B4C] hover:underline font-semibold cursor-pointer"
+                    >
+                      Kosongkan (Gunakan env Vercel)
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status URL yang Aktif Digunakan */}
+              <div className="bg-[#FAFAF7] border border-gray-200 rounded-xl p-2.5 text-xs">
+                <div className="text-[11px] text-[#6B7568] flex items-center justify-between">
+                  <span>URL Aktif Digunakan Sistem:</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      gasUrlInput.trim()
+                        ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                        : envGasUrl
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                        : 'bg-gray-100 text-gray-700 border border-gray-200'
+                    }`}
+                  >
+                    {gasUrlInput.trim() ? 'Form Ini' : envGasUrl ? 'Env Vercel (GAS_URL)' : 'Offline'}
+                  </span>
+                </div>
+                <div className="font-mono text-[11px] text-[#1F2A24] truncate mt-1 bg-white p-1.5 rounded border border-gray-100">
+                  {getGasUrl() || '(Tidak ada URL — mode offline lokal)'}
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={handleTestConnection}
-                disabled={testingConnection || !gasUrlInput}
+                disabled={testingConnection || (!gasUrlInput.trim() && !envGasUrl)}
                 className="flex-1 py-2 px-3 rounded-xl border border-[#0F6B4C] text-[#0F6B4C] text-xs font-semibold hover:bg-[#E8F3EE] transition flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {testingConnection ? (
@@ -979,18 +1344,16 @@ export const AdminEventPage: React.FC = () => {
                 ) : (
                   <ExternalLink className="w-3.5 h-3.5" />
                 )}
-                <span>Tes Koneksi</span>
+                <span>{gasUrlInput.trim() ? 'Tes URL Form' : 'Tes URL Vercel'}</span>
               </button>
 
-              {!isGasUrlEnvLocked && (
-                <button
-                  type="button"
-                  onClick={handleSaveGasUrl}
-                  className="flex-1 py-2 px-3 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold hover:bg-[#094A34] transition"
-                >
-                  Simpan URL
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleSaveGasUrl}
+                className="flex-1 py-2 px-3 rounded-xl bg-[#0F6B4C] text-white text-xs font-semibold hover:bg-[#094A34] transition"
+              >
+                {gasUrlInput.trim() ? 'Simpan URL Form' : 'Simpan (Kosongkan Form)'}
+              </button>
             </div>
 
             {testResult && (
@@ -1377,6 +1740,13 @@ export const AdminEventPage: React.FC = () => {
                 {selectedQR.tanggal} {selectedQR.waktu ? `• ${selectedQR.waktu}` : ''}
               </p>
 
+              {selectedQR.lokasi && (
+                <p className="text-[11px] text-[#0F6B4C] font-semibold mt-0.5 flex items-center justify-center gap-1">
+                  <span>📍</span>
+                  <span>{selectedQR.lokasi}</span>
+                </p>
+              )}
+
               {selectedQR.pemateri && (
                 <div className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0F6B4C] bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/80">
                   <UserIcon className="w-3.5 h-3.5" />
@@ -1431,7 +1801,7 @@ export const AdminEventPage: React.FC = () => {
       {/* MODAL: TAMBAH KAJIAN BARU */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-gray-100 relative">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-gray-100 relative max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setShowAddModal(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 p-1"
@@ -1456,7 +1826,12 @@ export const AdminEventPage: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setNewEventType('append')}
+                    onClick={() => {
+                      setNewEventType('append');
+                      if (!newLokasi || newLokasi === 'Posko Penukaran / Sekretariat DKM') {
+                        setNewLokasi('Ruang Utama Masjid Al Hijrah PTPP');
+                      }
+                    }}
                     className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       newEventType === 'append'
                         ? 'border-[#0F6B4C] bg-emerald-50/70 text-[#0F6B4C] ring-1 ring-[#0F6B4C]'
@@ -1477,7 +1852,12 @@ export const AdminEventPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setNewEventType('redeem')}
+                    onClick={() => {
+                      setNewEventType('redeem');
+                      if (!newLokasi || newLokasi === 'Ruang Utama Masjid Al Hijrah PTPP') {
+                        setNewLokasi('Posko Penukaran / Sekretariat DKM');
+                      }
+                    }}
                     className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       newEventType === 'redeem'
                         ? 'border-rose-600 bg-rose-50/70 text-rose-700 ring-1 ring-rose-600'
@@ -1581,6 +1961,24 @@ export const AdminEventPage: React.FC = () => {
                 />
               </div>
 
+              {/* Field Lokasi / Tempat Acara */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
+                  {newEventType === 'redeem' ? 'Lokasi Pengambilan / Posko' : 'Lokasi / Tempat Kajian'}
+                </label>
+                <input
+                  type="text"
+                  value={newLokasi}
+                  onChange={(e) => setNewLokasi(e.target.value)}
+                  placeholder={
+                    newEventType === 'redeem'
+                      ? 'Contoh: Posko Penukaran / Sekretariat DKM'
+                      : 'Contoh: Ruang Utama Masjid Al Hijrah PTPP'
+                  }
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7]"
+                />
+              </div>
+
               {/* Field Kuota Acara / Kajian */}
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -1621,6 +2019,247 @@ export const AdminEventPage: React.FC = () => {
                   : 'Simpan & Tampilkan QR Code'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TAMBAH VIDEO KAJIAN BARU (ADMIN ONLY: TITLE, DESC, LINK YOUTUBE) */}
+      {showAddVideoModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-xl border border-gray-100 my-8">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                  <VideoIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-[#1F2A24] font-heading">
+                    Tambah Video Kajian
+                  </h3>
+                  <p className="text-[10px] text-[#6B7568]">
+                    Embed video YouTube untuk jamaah Masjid Al Hijrah
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddVideoModal(false)}
+                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {videoError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{videoError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddVideo} className="space-y-3.5">
+              {/* Field 1: Title (Judul Video) */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
+                  Judul Video (Title) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newVideoTitle}
+                  onChange={(e) => setNewVideoTitle(e.target.value)}
+                  placeholder="Contoh: Kajian Fiqih Muamalah: Keberkahan Pekerja Proyek"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7]"
+                  required
+                />
+              </div>
+
+              {/* Field 2: Desc (Deskripsi Video) */}
+              <div>
+                <label className="block text-xs font-semibold text-[#1F2A24] mb-1">
+                  Deskripsi / Ringkasan (Desc)
+                </label>
+                <textarea
+                  value={newVideoDesc}
+                  onChange={(e) => setNewVideoDesc(e.target.value)}
+                  placeholder="Ringkasan isi materi, nama ustadz/narasumber, atau poin penting kajian..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7] resize-none"
+                />
+              </div>
+
+              {/* Field 3: Link YouTube */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1F2A24]">
+                    Link YouTube (URL) <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-red-600 font-semibold">
+                    YouTube URL
+                  </span>
+                </div>
+                <input
+                  type="url"
+                  value={newVideoUrl}
+                  onChange={(e) => setNewVideoUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... atau https://youtu.be/..."
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#0F6B4C] focus:outline-none bg-[#FAFAF7]"
+                  required
+                />
+                <p className="text-[10px] text-[#6B7568] mt-1">
+                  Mendukung link video biasa, link pendek (youtu.be), shorts, maupun live.
+                </p>
+              </div>
+
+              {/* Live YouTube Detection & Thumbnail Preview */}
+              {(() => {
+                if (!newVideoUrl.trim()) return null;
+                const detectedId = extractYouTubeId(newVideoUrl.trim());
+                if (detectedId) {
+                  const thumb = getYouTubeThumbnail(detectedId, 'hq');
+                  return (
+                    <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between text-xs text-emerald-800 font-semibold">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-600" />
+                          Link YouTube Terverifikasi
+                        </span>
+                        <span className="text-[10px] font-mono bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-900">
+                          ID: {detectedId}
+                        </span>
+                      </div>
+                      <div className="relative aspect-video rounded-xl overflow-hidden bg-black border border-emerald-200">
+                        <img
+                          src={thumb}
+                          alt="Thumbnail Preview"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                          <div className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md">
+                            <Play className="w-4 h-4 fill-current ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="text-[11px]">
+                        Format link belum dikenali sebagai YouTube. Pastikan link berisi video ID yang valid.
+                      </span>
+                    </div>
+                  );
+                }
+              })()}
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddVideoModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-[#6B7568] hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingVideo}
+                  className="flex-1 py-2.5 rounded-xl bg-[#0F6B4C] hover:bg-[#0c593f] text-white text-xs font-semibold shadow-xs transition active:scale-98 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {submittingVideo ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Simpan Video</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PREVIEW VIDEO PLAYER (ADMIN QUICK TEST) */}
+      {previewVideo && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+            <div className="p-3 sm:p-4 flex items-center justify-between border-b border-gray-100 bg-[#FAFAF7]">
+              <div className="flex items-center gap-2 truncate pr-2">
+                <div className="w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                  <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                </div>
+                <div className="truncate">
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider">
+                    Preview Video
+                  </p>
+                  <h4 className="text-xs font-bold text-[#1F2A24] truncate">
+                    {previewVideo.title}
+                  </h4>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setPreviewVideo(null)}
+                className="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Embedded YouTube Player */}
+            <div className="relative aspect-video w-full bg-black">
+              {(() => {
+                const ytId = extractYouTubeId(previewVideo.youtube_url);
+                if (ytId) {
+                  return (
+                    <iframe
+                      src={getYouTubeEmbedUrl(ytId, true)}
+                      title={previewVideo.title}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  );
+                }
+                return (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white p-4 text-center">
+                    <p className="text-xs text-gray-400">ID YouTube tidak dapat ditemukan</p>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Video Details */}
+            <div className="p-4 space-y-2 overflow-y-auto">
+              <h3 className="font-bold text-sm text-[#1F2A24] font-heading">
+                {previewVideo.title}
+              </h3>
+              <p className="text-xs text-[#6B7568] leading-relaxed whitespace-pre-line">
+                {previewVideo.description || 'Tidak ada deskripsi.'}
+              </p>
+              <div className="pt-2 flex items-center justify-between text-xs border-t border-gray-100">
+                <a
+                  href={previewVideo.youtube_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0F6B4C] hover:underline flex items-center gap-1 font-semibold text-[11px]"
+                >
+                  <span>Buka di YouTube</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => setPreviewVideo(null)}
+                  className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-semibold text-[#1F2A24] cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
