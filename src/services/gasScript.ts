@@ -65,6 +65,9 @@ function setupSheets() {
         }
       }
     }
+    if (!headerLower.includes("nrp")) {
+      sheetUsers.getRange(1, sheetUsers.getLastColumn() + 1).setValue("nrp");
+    }
   }
   
   // 2. Sheet master_event
@@ -175,6 +178,64 @@ function setupSheets() {
     sheetVideos = ss.insertSheet("videos");
     sheetVideos.appendRow(["video_id", "title", "description", "youtube_url", "created_at", "status"]);
   }
+
+  // 8. Sheet master_reimburst_program (Program Reimburst Multi-Jenis)
+  let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+  if (!sheetPrograms) {
+    sheetPrograms = ss.insertSheet("master_reimburst_program");
+    sheetPrograms.appendRow(["program_id", "jenis_reimburst", "nama_program", "tanggal_mulai", "tanggal_selesai", "maks_persen_reimburst", "status", "created_at"]);
+    // Seed default sample program
+    sheetPrograms.appendRow([
+      "prog_pendidikan_01",
+      "Pendidikan Anak",
+      "Reimburst SPP & Perlengkapan Sekolah Anak - Periode 2026",
+      "2026-01-01",
+      "2026-12-31",
+      50,
+      "active",
+      new Date().toISOString()
+    ]);
+  }
+
+  // 9. Sheet reimburst_claim (Pengajuan Klaim Jamaah)
+  let sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+  if (!sheetClaims) {
+    sheetClaims = ss.insertSheet("reimburst_claim");
+    sheetClaims.appendRow([
+      "claim_id",
+      "user_id",
+      "program_id",
+      "tanggal_klaim",
+      "jumlah_hak",
+      "besar_klaim",
+      "nama_bank",
+      "no_rekening",
+      "komentar",
+      "lampiran_file_id",
+      "lampiran_url",
+      "bukti_transfer_file_id",
+      "bukti_transfer_url",
+      "status",
+      "catatan_admin",
+      "created_at",
+      "updated_at"
+    ]);
+  }
+
+  // 10. Sheet master_bank (Daftar Bank Transfer)
+  let sheetBank = getSheetCaseInsensitive(ss, "master_bank");
+  if (!sheetBank) {
+    sheetBank = ss.insertSheet("master_bank");
+    sheetBank.appendRow(["bank_id", "nama_bank", "status"]);
+    sheetBank.appendRow(["bsi", "BSI (Bank Syariah Indonesia)", "active"]);
+    sheetBank.appendRow(["mandiri", "Bank Mandiri", "active"]);
+    sheetBank.appendRow(["bca", "Bank BCA", "active"]);
+    sheetBank.appendRow(["bri", "Bank BRI", "active"]);
+    sheetBank.appendRow(["bni", "Bank BNI", "active"]);
+    sheetBank.appendRow(["cimb", "Bank CIMB Niaga", "active"]);
+    sheetBank.appendRow(["permata", "Bank Permata", "active"]);
+    sheetBank.appendRow(["btn", "Bank BTN", "active"]);
+  }
 }
 
 // Helper mencari Sheet tanpa case sensitive & toleran spasi
@@ -277,6 +338,60 @@ function extractYouTubeIdGAS(url) {
   return "";
 }
 
+// SIMPAN FILE BASE64 KE GOOGLE DRIVE
+function saveBase64ToDrive(base64Data, fileName, folderName) {
+  try {
+    if (!base64Data) return { fileId: "", fileUrl: "", error: "File base64 kosong" };
+    var cleanBase64 = base64Data.toString().trim();
+    var contentType = "image/jpeg";
+    if (cleanBase64.indexOf(";base64,") !== -1) {
+      var parts = cleanBase64.split(";base64,");
+      contentType = parts[0].replace("data:", "").trim();
+      cleanBase64 = parts[1];
+    }
+    // Hapus whitespace atau newline yang mungkin menyusup
+    cleanBase64 = cleanBase64.replace(/\s+/g, "");
+
+    var decoded = Utilities.base64Decode(cleanBase64);
+    var blob = Utilities.newBlob(decoded, contentType, fileName || ("reimburst_" + Date.now() + ".jpg"));
+
+    // Cari atau buat folder penyimpanan di Google Drive (hindari karakter slash /)
+    var targetFolderName = (folderName || "Reimburse Al Hijrah").replace(/[\/\\]/g, " - ");
+    var folders = DriveApp.getFoldersByName(targetFolderName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(targetFolderName);
+
+    var file = folder.createFile(blob);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e) {
+      Logger.log("Sharing permission warning: " + e.toString());
+    }
+
+    var fileId = file.getId();
+    var fileUrl = "https://drive.google.com/file/d/" + fileId + "/view?usp=sharing";
+    return { fileId: fileId, fileUrl: fileUrl, error: null };
+  } catch (err) {
+    Logger.log("Error saveBase64ToDrive: " + err.toString());
+    return { fileId: "", fileUrl: "", error: err.toString() };
+  }
+}
+
+// FUNGSI UNTUK OTORISASI / TES IZIN GOOGLE DRIVE
+// Jalankan fungsi ini 1x di editor Google Apps Script dengan tombol 'Run' (Jalankan)
+// untuk menyetujui popup "Authorization Required" (Otorisasi Diperlukan).
+function testDriveAuth() {
+  try {
+    var folderName = "Reimburse Al Hijrah";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    Logger.log("DriveApp BERHASIL diotorisasi! Folder ID: " + folder.getId() + " - URL: " + folder.getUrl());
+    return "DriveApp BERHASIL diotorisasi! Folder ID: " + folder.getId() + " | Folder URL: " + folder.getUrl();
+  } catch (err) {
+    Logger.log("Otorisasi DriveApp Diperlukan / Error: " + err.toString());
+    throw err;
+  }
+}
+
 // Handle GET requests
 function doGet(e) {
   try {
@@ -323,6 +438,7 @@ function handleRouting(action, params) {
     const nama = (params.nama || "").toString().trim();
     const rawNoHp = params.no_hp || "";
     const pin = (params.pin || "").toString().trim();
+    const nrp = (params.nrp || "").toString().trim();
     const email = (params.email || "").toString().trim();
     const tanggal_lahir = (params.tanggal_lahir || "").toString().trim();
     const jenis_kelamin = (params.jenis_kelamin || "pria").toString().toLowerCase().trim();
@@ -331,6 +447,12 @@ function handleRouting(action, params) {
     
     if (!nama || !rawNoHp || !pin) {
       return jsonResponse({ success: false, error: "Nama, nomor HP, dan PIN wajib diisi" });
+    }
+    if (!nrp) {
+      return jsonResponse({ success: false, error: "NRP wajib diisi" });
+    }
+    if (nrp.length > 16) {
+      return jsonResponse({ success: false, error: "NRP maksimal 16 karakter" });
     }
     
     const no_hp = sanitizePhone(rawNoHp);
@@ -345,8 +467,18 @@ function handleRouting(action, params) {
         return jsonResponse({ success: false, error: "Nomor HP sudah terdaftar. Silakan login." });
       }
     }
+
+    // Cek duplikat nrp
+    const nrpCheckCol = userHeaderMap["nrp"];
+    if (nrpCheckCol !== undefined) {
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][nrpCheckCol] && data[i][nrpCheckCol].toString().trim().toLowerCase() === nrp.toLowerCase()) {
+          return jsonResponse({ success: false, error: "NRP " + nrp + " sudah terdaftar. Gunakan NRP Anda sendiri." });
+        }
+      }
+    }
     
-    // Pastikan kolom baru email, tanggal_lahir, jenis_kelamin, status_jamaah, role tersedia di header
+    // Pastikan kolom baru email, tanggal_lahir, jenis_kelamin, status_jamaah, role, nrp tersedia di header
     if (userHeaderMap["email"] === undefined) {
       const newCol = sheetUsers.getLastColumn() + 1;
       sheetUsers.getRange(1, newCol).setValue("email");
@@ -387,6 +519,11 @@ function handleRouting(action, params) {
       sheetUsers.getRange(1, newCol).setValue("role");
       userHeaderMap["role"] = newCol - 1;
     }
+    if (userHeaderMap["nrp"] === undefined) {
+      const newCol = sheetUsers.getLastColumn() + 1;
+      sheetUsers.getRange(1, newCol).setValue("nrp");
+      userHeaderMap["nrp"] = newCol - 1;
+    }
     
     const user_id = generateUUID();
     const total_poin = 0;
@@ -414,6 +551,7 @@ function handleRouting(action, params) {
     rowData[roleCol] = role;
     const createdCol = userHeaderMap["created_at"] !== undefined ? userHeaderMap["created_at"] : 6;
     if (createdCol < totalCols) rowData[createdCol] = created_at;
+    if (userHeaderMap["nrp"] !== undefined) rowData[userHeaderMap["nrp"]] = nrp;
     
     sheetUsers.appendRow(rowData);
     
@@ -424,6 +562,7 @@ function handleRouting(action, params) {
         user_id: user_id,
         nama: nama,
         no_hp: no_hp,
+        nrp: nrp,
         email: email,
         tanggal_lahir: tanggal_lahir,
         jenis_kelamin: jenis_kelamin,
@@ -466,6 +605,7 @@ function handleRouting(action, params) {
     const spCol = userHeaderMap["status_pegawai"];
     const compCol = userHeaderMap["company_id"];
     const unitCol = userHeaderMap["unit_id"];
+    const nrpCol = userHeaderMap["nrp"];
     
     for (let i = 1; i < data.length; i++) {
       const rowPhone = sanitizePhone(data[i][phoneCol] ? data[i][phoneCol].toString() : "");
@@ -493,6 +633,7 @@ function handleRouting(action, params) {
               user_id: data[i][idCol],
               nama: data[i][nameCol],
               no_hp: rowPhone,
+              nrp: nrpCol !== undefined ? (data[i][nrpCol] || "").toString() : "",
               email: emailCol !== undefined ? (data[i][emailCol] || "").toString() : "",
               tanggal_lahir: tglCol !== undefined ? (data[i][tglCol] || "").toString() : "",
               jenis_kelamin: jkCol !== undefined ? (data[i][jkCol] || "pria").toString() : "pria",
@@ -512,6 +653,43 @@ function handleRouting(action, params) {
     }
     
     return jsonResponse({ success: false, error: "Nomor HP belum terdaftar. Silakan daftar akun baru." });
+  }
+
+  // 2.1 UPDATE NRP (Untuk melengkapi data user lama)
+  if (action === "updateNrp") {
+    const user_id = params.user_id;
+    const nrp = (params.nrp || "").toString().trim();
+    if (!user_id || !nrp) {
+      return jsonResponse({ success: false, error: "User ID dan NRP wajib diisi" });
+    }
+    if (nrp.length > 16) {
+      return jsonResponse({ success: false, error: "NRP maksimal 16 karakter" });
+    }
+    const sheetUsers = ss.getSheetByName("users");
+    const userHeaderMap = getHeaderMap(sheetUsers);
+    if (userHeaderMap["nrp"] === undefined) {
+      const newCol = sheetUsers.getLastColumn() + 1;
+      sheetUsers.getRange(1, newCol).setValue("nrp");
+      userHeaderMap["nrp"] = newCol - 1;
+    }
+    const nrpCol = userHeaderMap["nrp"];
+    const idCol = userHeaderMap["user_id"] !== undefined ? userHeaderMap["user_id"] : 0;
+    const data = sheetUsers.getDataRange().getValues();
+    
+    // Cek duplikat NRP pada user lain
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idCol] !== user_id && data[i][nrpCol] && data[i][nrpCol].toString().trim().toLowerCase() === nrp.toLowerCase()) {
+        return jsonResponse({ success: false, error: "NRP " + nrp + " sudah digunakan oleh jamaah lain" });
+      }
+    }
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idCol] === user_id) {
+        sheetUsers.getRange(i + 1, nrpCol + 1).setValue(nrp);
+        SpreadsheetApp.flush();
+        return jsonResponse({ success: true, message: "NRP berhasil diperbarui", nrp: nrp });
+      }
+    }
+    return jsonResponse({ success: false, error: "User tidak ditemukan" });
   }
   
   // 2.5. VALIDATE QR (Pre-check sebelum isi form penilaian)
@@ -1031,6 +1209,10 @@ function handleRouting(action, params) {
     const tglCol = userHeaderMap["tanggal_lahir"];
     const jkCol = userHeaderMap["jenis_kelamin"];
     const statusCol = userHeaderMap["status_jamaah"];
+    const spCol = userHeaderMap["status_pegawai"];
+    const compCol = userHeaderMap["company_id"];
+    const unitCol = userHeaderMap["unit_id"];
+    const nrpCol = userHeaderMap["nrp"];
     
     for (let i = 1; i < data.length; i++) {
       if (data[i][idCol] === user_id) {
@@ -1047,10 +1229,14 @@ function handleRouting(action, params) {
             user_id: data[i][idCol],
             nama: data[i][nameCol],
             no_hp: data[i][phoneCol],
+            nrp: nrpCol !== undefined ? (data[i][nrpCol] || "").toString() : "",
             email: emailCol !== undefined ? (data[i][emailCol] || "").toString() : "",
             tanggal_lahir: tglCol !== undefined ? (data[i][tglCol] || "").toString() : "",
             jenis_kelamin: jkCol !== undefined ? (data[i][jkCol] || "pria").toString() : "pria",
             status_jamaah: statusCol !== undefined ? (data[i][statusCol] || "Umum").toString() : "Umum",
+            status_pegawai: spCol !== undefined ? (data[i][spCol] || "").toString() : "",
+            company_id: compCol !== undefined ? (data[i][compCol] || "").toString() : "",
+            unit_id: unitCol !== undefined ? (data[i][unitCol] || "").toString() : "",
             total_poin: Number(data[i][poinCol]) || 0,
             role: userRole,
             created_at: createdCol !== undefined ? (data[i][createdCol] || "").toString() : ""
@@ -1673,6 +1859,728 @@ function handleRouting(action, params) {
       }
     }
     return jsonResponse({ success: false, error: "Video tidak ditemukan" });
+  }
+
+  // =========================================================================
+  // 14. FITUR REIMBURST MULTI-JENIS (JAMAAH & ADMIN)
+  // =========================================================================
+
+  // 14.1 GET REIMBURST JENIS LIST (Daftar Kategori Unik dari Program Aktif)
+  if (action === "getReimburstJenisList") {
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    if (!sheetPrograms) return jsonResponse({ success: true, data: [] });
+    const data = sheetPrograms.getDataRange().getValues();
+    if (data.length <= 1) return jsonResponse({ success: true, data: [] });
+    const headerMap = getHeaderMap(sheetPrograms);
+    const colJenis = headerMap["jenis_reimburst"] !== undefined ? headerMap["jenis_reimburst"] : 1;
+    const colStatus = headerMap["status"] !== undefined ? headerMap["status"] : 6;
+
+    const jenisMap = {};
+    for (let i = 1; i < data.length; i++) {
+      const status = (data[i][colStatus] || "active").toString().toLowerCase().trim();
+      const jenis = (data[i][colJenis] || "").toString().trim();
+      if (jenis && status === "active") {
+        if (!jenisMap[jenis.toLowerCase()]) {
+          jenisMap[jenis.toLowerCase()] = {
+            jenis_reimburst: jenis,
+            program_count: 1
+          };
+        } else {
+          jenisMap[jenis.toLowerCase()].program_count++;
+        }
+      }
+    }
+    const list = Object.keys(jenisMap).map(k => jenisMap[k]);
+    return jsonResponse({ success: true, data: list });
+  }
+
+  // 14.2 GET REIMBURST PROGRAMS (Program Aktif, Opsional filter per jenis)
+  if (action === "getReimburstPrograms") {
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    if (!sheetPrograms) return jsonResponse({ success: true, data: [] });
+    const data = sheetPrograms.getDataRange().getValues();
+    if (data.length <= 1) return jsonResponse({ success: true, data: [] });
+    const headerMap = getHeaderMap(sheetPrograms);
+
+    const colId = headerMap["program_id"] !== undefined ? headerMap["program_id"] : 0;
+    const colJenis = headerMap["jenis_reimburst"] !== undefined ? headerMap["jenis_reimburst"] : 1;
+    const colNama = headerMap["nama_program"] !== undefined ? headerMap["nama_program"] : 2;
+    const colMulai = headerMap["tanggal_mulai"] !== undefined ? headerMap["tanggal_mulai"] : 3;
+    const colSelesai = headerMap["tanggal_selesai"] !== undefined ? headerMap["tanggal_selesai"] : 4;
+    const colPersen = headerMap["maks_persen_reimburst"] !== undefined ? headerMap["maks_persen_reimburst"] : 5;
+    const colStatus = headerMap["status"] !== undefined ? headerMap["status"] : 6;
+    const colCreated = headerMap["created_at"] !== undefined ? headerMap["created_at"] : 7;
+
+    const targetJenis = (params.jenis_reimburst || "").toString().trim().toLowerCase();
+    const programs = [];
+    for (let i = 1; i < data.length; i++) {
+      const status = (data[i][colStatus] || "active").toString().toLowerCase().trim();
+      const jenis = (data[i][colJenis] || "").toString().trim();
+      if (status === "active") {
+        if (!targetJenis || jenis.toLowerCase() === targetJenis) {
+          programs.push({
+            program_id: (data[i][colId] || "").toString(),
+            jenis_reimburst: jenis,
+            nama_program: (data[i][colNama] || "").toString(),
+            tanggal_mulai: (data[i][colMulai] || "").toString(),
+            tanggal_selesai: (data[i][colSelesai] || "").toString(),
+            maks_persen_reimburst: Number(data[i][colPersen]) || 50,
+            status: status,
+            created_at: (data[i][colCreated] || "").toString()
+          });
+        }
+      }
+    }
+    return jsonResponse({ success: true, data: programs });
+  }
+
+  // 14.3 GET ALL REIMBURST PROGRAMS (Admin View - Semua status)
+  if (action === "getAllReimburstPrograms") {
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    if (!sheetPrograms) return jsonResponse({ success: true, data: [] });
+    const data = sheetPrograms.getDataRange().getValues();
+    if (data.length <= 1) return jsonResponse({ success: true, data: [] });
+    const headerMap = getHeaderMap(sheetPrograms);
+
+    const colId = headerMap["program_id"] !== undefined ? headerMap["program_id"] : 0;
+    const colJenis = headerMap["jenis_reimburst"] !== undefined ? headerMap["jenis_reimburst"] : 1;
+    const colNama = headerMap["nama_program"] !== undefined ? headerMap["nama_program"] : 2;
+    const colMulai = headerMap["tanggal_mulai"] !== undefined ? headerMap["tanggal_mulai"] : 3;
+    const colSelesai = headerMap["tanggal_selesai"] !== undefined ? headerMap["tanggal_selesai"] : 4;
+    const colPersen = headerMap["maks_persen_reimburst"] !== undefined ? headerMap["maks_persen_reimburst"] : 5;
+    const colStatus = headerMap["status"] !== undefined ? headerMap["status"] : 6;
+    const colCreated = headerMap["created_at"] !== undefined ? headerMap["created_at"] : 7;
+
+    const programs = [];
+    for (let i = 1; i < data.length; i++) {
+      programs.push({
+        program_id: (data[i][colId] || "").toString(),
+        jenis_reimburst: (data[i][colJenis] || "").toString().trim(),
+        nama_program: (data[i][colNama] || "").toString(),
+        tanggal_mulai: (data[i][colMulai] || "").toString(),
+        tanggal_selesai: (data[i][colSelesai] || "").toString(),
+        maks_persen_reimburst: Number(data[i][colPersen]) || 50,
+        status: (data[i][colStatus] || "active").toString().toLowerCase().trim(),
+        created_at: (data[i][colCreated] || "").toString()
+      });
+    }
+    programs.reverse();
+    return jsonResponse({ success: true, data: programs });
+  }
+
+  // 14.4 ADD REIMBURST PROGRAM (Admin Only)
+  if (action === "addReimburstProgram") {
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    if (!sheetPrograms) {
+      sheetPrograms = ss.insertSheet("master_reimburst_program");
+      sheetPrograms.appendRow(["program_id", "jenis_reimburst", "nama_program", "tanggal_mulai", "tanggal_selesai", "maks_persen_reimburst", "status", "created_at"]);
+    }
+    const rawJenis = (params.jenis_reimburst || "").toString().trim();
+    const nama_program = (params.nama_program || "").toString().trim();
+    const tanggal_mulai = (params.tanggal_mulai || "").toString().trim() || new Date().toISOString().split("T")[0];
+    const tanggal_selesai = (params.tanggal_selesai || "").toString().trim() || "2026-12-31";
+    const maks_persen = Math.min(100, Math.max(1, Number(params.maks_persen_reimburst) || 50));
+
+    if (!rawJenis) return jsonResponse({ success: false, error: "Jenis/Kategori reimburst wajib diisi" });
+    if (!nama_program) return jsonResponse({ success: false, error: "Nama program reimburst wajib diisi" });
+
+    // Normalisasi jenis reimburst ke Title Case
+    const jenis_reimburst = rawJenis.replace(/\\w\\S*/g, function(txt) {
+      return txt.charAt(0).toUpperCase() + txt.substr(1);
+    });
+
+    const program_id = "prog_" + Date.now();
+    const created_at = new Date().toISOString();
+    const status = "active";
+
+    sheetPrograms.appendRow([program_id, jenis_reimburst, nama_program, tanggal_mulai, tanggal_selesai, maks_persen, status, created_at]);
+    SpreadsheetApp.flush();
+
+    return jsonResponse({
+      success: true,
+      message: "Program reimburst berhasil dibuat",
+      data: {
+        program_id: program_id,
+        jenis_reimburst: jenis_reimburst,
+        nama_program: nama_program,
+        tanggal_mulai: tanggal_mulai,
+        tanggal_selesai: tanggal_selesai,
+        maks_persen_reimburst: maks_persen,
+        status: status,
+        created_at: created_at
+      }
+    });
+  }
+
+  // 14.5 TOGGLE REIMBURST PROGRAM STATUS (Admin Only)
+  if (action === "toggleReimburstProgram") {
+    const program_id = (params.program_id || "").toString().trim();
+    const newStatus = (params.status || "active").toString().toLowerCase().trim();
+    if (!program_id) return jsonResponse({ success: false, error: "Program ID diperlukan" });
+    const sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    if (!sheetPrograms) return jsonResponse({ success: false, error: "Tabel program reimburst tidak ditemukan" });
+    const data = sheetPrograms.getDataRange().getValues();
+    const headerMap = getHeaderMap(sheetPrograms);
+    const idCol = headerMap["program_id"] !== undefined ? headerMap["program_id"] : 0;
+    const statusCol = headerMap["status"] !== undefined ? headerMap["status"] : 6;
+
+    for (let i = 1; i < data.length; i++) {
+      if ((data[i][idCol] || "").toString().trim() === program_id) {
+        sheetPrograms.getRange(i + 1, statusCol + 1).setValue(newStatus);
+        SpreadsheetApp.flush();
+        return jsonResponse({ success: true, message: "Status program berhasil diubah menjadi " + newStatus });
+      }
+    }
+    return jsonResponse({ success: false, error: "Program tidak ditemukan" });
+  }
+
+  // 14.6 GET BANK LIST (Master Bank Aktif)
+  if (action === "getBankList") {
+    let sheetBank = getSheetCaseInsensitive(ss, "master_bank");
+    if (!sheetBank) {
+      setupSheets();
+      sheetBank = getSheetCaseInsensitive(ss, "master_bank");
+    }
+    if (!sheetBank) return jsonResponse({ success: true, data: [] });
+    const data = sheetBank.getDataRange().getValues();
+    const headerMap = getHeaderMap(sheetBank);
+    const idCol = headerMap["bank_id"] !== undefined ? headerMap["bank_id"] : 0;
+    const nameCol = headerMap["nama_bank"] !== undefined ? headerMap["nama_bank"] : 1;
+    const statusCol = headerMap["status"] !== undefined ? headerMap["status"] : 2;
+
+    const banks = [];
+    for (let i = 1; i < data.length; i++) {
+      const status = (data[i][statusCol] || "active").toString().toLowerCase().trim();
+      if (status === "active") {
+        banks.push({
+          bank_id: (data[i][idCol] || "").toString(),
+          nama_bank: (data[i][nameCol] || "").toString(),
+          status: status
+        });
+      }
+    }
+    return jsonResponse({ success: true, data: banks });
+  }
+
+  // 14.7 SUBMIT CLAIM (Jamaah - Menggunakan LockService)
+  if (action === "submitClaim") {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+    } catch (e) {
+      return jsonResponse({ success: false, error: "Server sedang sibuk memproses transaksi lain, silakan ulangi beberapa saat lagi." });
+    }
+
+    try {
+      const user_id = (params.user_id || "").toString().trim();
+      const program_id = (params.program_id || "").toString().trim();
+      const besar_klaim = Number(params.besar_klaim) || 0;
+      const nama_bank = (params.nama_bank || "").toString().trim();
+      const no_rekening = (params.no_rekening || "").toString().trim();
+      const komentar = (params.komentar || "").toString().trim();
+      const file_base64 = params.file_base64 || "";
+      const file_name = params.file_name || ("kuitansi_" + Date.now() + ".jpg");
+
+      if (!user_id) return jsonResponse({ success: false, error: "User ID diperlukan" });
+      if (!program_id) return jsonResponse({ success: false, error: "Pilih program reimburst yang akan diajukan" });
+      if (besar_klaim <= 0) return jsonResponse({ success: false, error: "Besar klaim harus lebih dari Rp 0" });
+      if (!nama_bank || !no_rekening) return jsonResponse({ success: false, error: "Nama bank dan nomor rekening wajib diisi" });
+
+      const sheetUsers = ss.getSheetByName("users");
+      const sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+      let sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+      if (!sheetClaims) {
+        setupSheets();
+        sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+      }
+
+      // Validasi User & Ambil Poin Terkini
+      const userHeaderMap = getHeaderMap(sheetUsers);
+      const userData = sheetUsers.getDataRange().getValues();
+      const userIdCol = userHeaderMap["user_id"] !== undefined ? userHeaderMap["user_id"] : 0;
+      const userPoinCol = userHeaderMap["total_poin"] !== undefined ? userHeaderMap["total_poin"] : 4;
+      const userNamaCol = userHeaderMap["nama"] !== undefined ? userHeaderMap["nama"] : 1;
+      const userNrpCol = userHeaderMap["nrp"];
+
+      let userRowIdx = -1;
+      let userTotalPoin = 0;
+      let userName = "";
+      let userNrp = "";
+
+      for (let i = 1; i < userData.length; i++) {
+        if ((userData[i][userIdCol] || "").toString().trim() === user_id) {
+          userRowIdx = i + 1;
+          userTotalPoin = Number(userData[i][userPoinCol]) || 0;
+          userName = (userData[i][userNamaCol] || "").toString();
+          userNrp = userNrpCol !== undefined ? (userData[i][userNrpCol] || "").toString() : "";
+          break;
+        }
+      }
+
+      if (userRowIdx === -1) {
+        return jsonResponse({ success: false, error: "Data jamaah tidak ditemukan" });
+      }
+
+      // Validasi Program
+      const progHeaderMap = getHeaderMap(sheetPrograms);
+      const progData = sheetPrograms.getDataRange().getValues();
+      const progIdCol = progHeaderMap["program_id"] !== undefined ? progHeaderMap["program_id"] : 0;
+      const progJenisCol = progHeaderMap["jenis_reimburst"] !== undefined ? progHeaderMap["jenis_reimburst"] : 1;
+      const progNamaCol = progHeaderMap["nama_program"] !== undefined ? progHeaderMap["nama_program"] : 2;
+      const progPersenCol = progHeaderMap["maks_persen_reimburst"] !== undefined ? progHeaderMap["maks_persen_reimburst"] : 5;
+      const progStatusCol = progHeaderMap["status"] !== undefined ? progHeaderMap["status"] : 6;
+
+      let targetProg = null;
+      for (let i = 1; i < progData.length; i++) {
+        if ((progData[i][progIdCol] || "").toString().trim() === program_id) {
+          targetProg = {
+            program_id: program_id,
+            jenis_reimburst: (progData[i][progJenisCol] || "").toString(),
+            nama_program: (progData[i][progNamaCol] || "").toString(),
+            maks_persen: Number(progData[i][progPersenCol]) || 50,
+            status: (progData[i][progStatusCol] || "active").toString().toLowerCase().trim()
+          };
+          break;
+        }
+      }
+
+      if (!targetProg) {
+        return jsonResponse({ success: false, error: "Program reimburst tidak ditemukan" });
+      }
+      if (targetProg.status !== "active") {
+        return jsonResponse({ success: false, error: "Program reimburst ini sudah tidak aktif" });
+      }
+
+      // Hitung hak klaim (1 poin = Rp 1)
+      const jumlah_hak = Math.floor(userTotalPoin * (targetProg.maks_persen / 100));
+
+      if (besar_klaim > jumlah_hak) {
+        return jsonResponse({
+          success: false,
+          error: "Besar klaim (Rp " + besar_klaim.toLocaleString("id-ID") + ") melebihi batas hak klaim Anda (Rp " + jumlah_hak.toLocaleString("id-ID") + ")."
+        });
+      }
+
+      if (besar_klaim > userTotalPoin) {
+        return jsonResponse({
+          success: false,
+          error: "Saldo poin Anda tidak mencukupi untuk melakukan klaim sebesar Rp " + besar_klaim.toLocaleString("id-ID")
+        });
+      }
+
+      // Upload file lampiran ke Google Drive
+      let lampiran_file_id = "";
+      let lampiran_url = "";
+      if (file_base64) {
+        const uploadResult = saveBase64ToDrive(file_base64, file_name, "Reimburse Al Hijrah");
+        lampiran_file_id = uploadResult.fileId || "";
+        lampiran_url = uploadResult.fileUrl || "";
+        if (!lampiran_url && uploadResult.error) {
+          return jsonResponse({
+            success: false,
+            error: "Gagal menyimpan lampiran ke Google Drive: " + uploadResult.error + ". Buka editor Google Apps Script, pilih fungsi 'testDriveAuth', lalu klik 'Run' (Jalankan) untuk menyetujui izin Google Drive, kemudian deploy 'Versi Baru'."
+          });
+        }
+      }
+
+      // Potong saldo poin user langsung
+      const newTotalPoin = userTotalPoin - besar_klaim;
+      sheetUsers.getRange(userRowIdx, userPoinCol + 1).setValue(newTotalPoin);
+
+      // Simpan row klaim baru
+      const claim_id = "clm_" + Date.now();
+      const tanggal_klaim = new Date().toISOString().split("T")[0];
+      const created_at = new Date().toISOString();
+      const status = "submitted";
+
+      sheetClaims.appendRow([
+        claim_id,
+        user_id,
+        program_id,
+        tanggal_klaim,
+        jumlah_hak,
+        besar_klaim,
+        nama_bank,
+        no_rekening,
+        komentar,
+        lampiran_file_id,
+        lampiran_url,
+        "", // bukti_transfer_file_id
+        "", // bukti_transfer_url
+        status,
+        "", // catatan_admin
+        created_at,
+        created_at
+      ]);
+      SpreadsheetApp.flush();
+
+      return jsonResponse({
+        success: true,
+        message: "Pengajuan klaim berhasil dikirim. Menunggu verifikasi admin.",
+        data: {
+          claim_id: claim_id,
+          user_id: user_id,
+          program_id: program_id,
+          nama_program: targetProg.nama_program,
+          jenis_reimburst: targetProg.jenis_reimburst,
+          tanggal_klaim: tanggal_klaim,
+          jumlah_hak: jumlah_hak,
+          besar_klaim: besar_klaim,
+          nama_bank: nama_bank,
+          no_rekening: no_rekening,
+          status: status,
+          lampiran_url: lampiran_url,
+          total_poin_terbaru: newTotalPoin,
+          created_at: created_at
+        }
+      });
+    } catch (err) {
+      return jsonResponse({ success: false, error: "Gagal submit klaim: " + err.toString() });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  // 14.8 GET MY CLAIMS (Riwayat Klaim Jamaah Terkait)
+  if (action === "getMyClaims") {
+    const user_id = (params.user_id || "").toString().trim();
+    if (!user_id) return jsonResponse({ success: false, error: "User ID diperlukan" });
+    let sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+    if (!sheetClaims) return jsonResponse({ success: true, data: [] });
+    const claimData = sheetClaims.getDataRange().getValues();
+    if (claimData.length <= 1) return jsonResponse({ success: true, data: [] });
+    const claimHeaderMap = getHeaderMap(sheetClaims);
+
+    // Map program info
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    const progMap = {};
+    if (sheetPrograms) {
+      const progData = sheetPrograms.getDataRange().getValues();
+      const progHeaderMap = getHeaderMap(sheetPrograms);
+      const pIdCol = progHeaderMap["program_id"] !== undefined ? progHeaderMap["program_id"] : 0;
+      const pJenisCol = progHeaderMap["jenis_reimburst"] !== undefined ? progHeaderMap["jenis_reimburst"] : 1;
+      const pNamaCol = progHeaderMap["nama_program"] !== undefined ? progHeaderMap["nama_program"] : 2;
+      for (let i = 1; i < progData.length; i++) {
+        progMap[(progData[i][pIdCol] || "").toString().trim()] = {
+          jenis_reimburst: (progData[i][pJenisCol] || "").toString(),
+          nama_program: (progData[i][pNamaCol] || "").toString()
+        };
+      }
+    }
+
+    const cIdCol = claimHeaderMap["claim_id"] !== undefined ? claimHeaderMap["claim_id"] : 0;
+    const cUserIdCol = claimHeaderMap["user_id"] !== undefined ? claimHeaderMap["user_id"] : 1;
+    const cProgIdCol = claimHeaderMap["program_id"] !== undefined ? claimHeaderMap["program_id"] : 2;
+    const cTglCol = claimHeaderMap["tanggal_klaim"] !== undefined ? claimHeaderMap["tanggal_klaim"] : 3;
+    const cHakCol = claimHeaderMap["jumlah_hak"] !== undefined ? claimHeaderMap["jumlah_hak"] : 4;
+    const cBesarCol = claimHeaderMap["besar_klaim"] !== undefined ? claimHeaderMap["besar_klaim"] : 5;
+    const cBankCol = claimHeaderMap["nama_bank"] !== undefined ? claimHeaderMap["nama_bank"] : 6;
+    const cRekCol = claimHeaderMap["no_rekening"] !== undefined ? claimHeaderMap["no_rekening"] : 7;
+    const cKomenCol = claimHeaderMap["komentar"] !== undefined ? claimHeaderMap["komentar"] : 8;
+    const cLampIdCol = claimHeaderMap["lampiran_file_id"] !== undefined ? claimHeaderMap["lampiran_file_id"] : 9;
+    const cLampUrlCol = claimHeaderMap["lampiran_url"] !== undefined ? claimHeaderMap["lampiran_url"] : 10;
+    const cBuktiIdCol = claimHeaderMap["bukti_transfer_file_id"] !== undefined ? claimHeaderMap["bukti_transfer_file_id"] : 11;
+    const cBuktiUrlCol = claimHeaderMap["bukti_transfer_url"] !== undefined ? claimHeaderMap["bukti_transfer_url"] : 12;
+    const cStatusCol = claimHeaderMap["status"] !== undefined ? claimHeaderMap["status"] : 13;
+    const cCatatanCol = claimHeaderMap["catatan_admin"] !== undefined ? claimHeaderMap["catatan_admin"] : 14;
+    const cCreatedCol = claimHeaderMap["created_at"] !== undefined ? claimHeaderMap["created_at"] : 15;
+    const cUpdatedCol = claimHeaderMap["updated_at"] !== undefined ? claimHeaderMap["updated_at"] : 16;
+
+    const myClaims = [];
+    for (let i = 1; i < claimData.length; i++) {
+      if ((claimData[i][cUserIdCol] || "").toString().trim() === user_id) {
+        const progId = (claimData[i][cProgIdCol] || "").toString().trim();
+        const progInfo = progMap[progId] || { nama_program: "Program Reimburst", jenis_reimburst: "Umum" };
+        myClaims.push({
+          claim_id: (claimData[i][cIdCol] || "").toString(),
+          user_id: user_id,
+          program_id: progId,
+          nama_program: progInfo.nama_program,
+          jenis_reimburst: progInfo.jenis_reimburst,
+          tanggal_klaim: (claimData[i][cTglCol] || "").toString(),
+          jumlah_hak: Number(claimData[i][cHakCol]) || 0,
+          besar_klaim: Number(claimData[i][cBesarCol]) || 0,
+          nama_bank: (claimData[i][cBankCol] || "").toString(),
+          no_rekening: (claimData[i][cRekCol] || "").toString(),
+          komentar: (claimData[i][cKomenCol] || "").toString(),
+          lampiran_file_id: (claimData[i][cLampIdCol] || "").toString(),
+          lampiran_url: (claimData[i][cLampUrlCol] || "").toString(),
+          bukti_transfer_file_id: (claimData[i][cBuktiIdCol] || "").toString(),
+          bukti_transfer_url: (claimData[i][cBuktiUrlCol] || "").toString(),
+          status: (claimData[i][cStatusCol] || "submitted").toString().toLowerCase().trim(),
+          catatan_admin: (claimData[i][cCatatanCol] || "").toString(),
+          created_at: (claimData[i][cCreatedCol] || "").toString(),
+          updated_at: (claimData[i][cUpdatedCol] || "").toString()
+        });
+      }
+    }
+    myClaims.reverse();
+    return jsonResponse({ success: true, data: myClaims });
+  }
+
+  // 14.9 GET ALL CLAIMS (Admin View)
+  if (action === "getAllClaims") {
+    let sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+    if (!sheetClaims) return jsonResponse({ success: true, data: [] });
+    const claimData = sheetClaims.getDataRange().getValues();
+    if (claimData.length <= 1) return jsonResponse({ success: true, data: [] });
+    const claimHeaderMap = getHeaderMap(sheetClaims);
+
+    // Map user info (nama, nrp, no_hp)
+    const sheetUsers = ss.getSheetByName("users");
+    const userMap = {};
+    if (sheetUsers) {
+      const uData = sheetUsers.getDataRange().getValues();
+      const uMap = getHeaderMap(sheetUsers);
+      const uIdCol = uMap["user_id"] !== undefined ? uMap["user_id"] : 0;
+      const uNameCol = uMap["nama"] !== undefined ? uMap["nama"] : 1;
+      const uPhoneCol = uMap["no_hp"] !== undefined ? uMap["no_hp"] : 2;
+      const uNrpCol = uMap["nrp"];
+      for (let i = 1; i < uData.length; i++) {
+        userMap[(uData[i][uIdCol] || "").toString().trim()] = {
+          nama: (uData[i][uNameCol] || "").toString(),
+          no_hp: (uData[i][uPhoneCol] || "").toString(),
+          nrp: uNrpCol !== undefined ? (uData[i][uNrpCol] || "").toString() : ""
+        };
+      }
+    }
+
+    // Map program info
+    let sheetPrograms = getSheetCaseInsensitive(ss, "master_reimburst_program");
+    const progMap = {};
+    if (sheetPrograms) {
+      const progData = sheetPrograms.getDataRange().getValues();
+      const progHeaderMap = getHeaderMap(sheetPrograms);
+      const pIdCol = progHeaderMap["program_id"] !== undefined ? progHeaderMap["program_id"] : 0;
+      const pJenisCol = progHeaderMap["jenis_reimburst"] !== undefined ? progHeaderMap["jenis_reimburst"] : 1;
+      const pNamaCol = progHeaderMap["nama_program"] !== undefined ? progHeaderMap["nama_program"] : 2;
+      for (let i = 1; i < progData.length; i++) {
+        progMap[(progData[i][pIdCol] || "").toString().trim()] = {
+          jenis_reimburst: (progData[i][pJenisCol] || "").toString(),
+          nama_program: (progData[i][pNamaCol] || "").toString()
+        };
+      }
+    }
+
+    const cIdCol = claimHeaderMap["claim_id"] !== undefined ? claimHeaderMap["claim_id"] : 0;
+    const cUserIdCol = claimHeaderMap["user_id"] !== undefined ? claimHeaderMap["user_id"] : 1;
+    const cProgIdCol = claimHeaderMap["program_id"] !== undefined ? claimHeaderMap["program_id"] : 2;
+    const cTglCol = claimHeaderMap["tanggal_klaim"] !== undefined ? claimHeaderMap["tanggal_klaim"] : 3;
+    const cHakCol = claimHeaderMap["jumlah_hak"] !== undefined ? claimHeaderMap["jumlah_hak"] : 4;
+    const cBesarCol = claimHeaderMap["besar_klaim"] !== undefined ? claimHeaderMap["besar_klaim"] : 5;
+    const cBankCol = claimHeaderMap["nama_bank"] !== undefined ? claimHeaderMap["nama_bank"] : 6;
+    const cRekCol = claimHeaderMap["no_rekening"] !== undefined ? claimHeaderMap["no_rekening"] : 7;
+    const cKomenCol = claimHeaderMap["komentar"] !== undefined ? claimHeaderMap["komentar"] : 8;
+    const cLampIdCol = claimHeaderMap["lampiran_file_id"] !== undefined ? claimHeaderMap["lampiran_file_id"] : 9;
+    const cLampUrlCol = claimHeaderMap["lampiran_url"] !== undefined ? claimHeaderMap["lampiran_url"] : 10;
+    const cBuktiIdCol = claimHeaderMap["bukti_transfer_file_id"] !== undefined ? claimHeaderMap["bukti_transfer_file_id"] : 11;
+    const cBuktiUrlCol = claimHeaderMap["bukti_transfer_url"] !== undefined ? claimHeaderMap["bukti_transfer_url"] : 12;
+    const cStatusCol = claimHeaderMap["status"] !== undefined ? claimHeaderMap["status"] : 13;
+    const cCatatanCol = claimHeaderMap["catatan_admin"] !== undefined ? claimHeaderMap["catatan_admin"] : 14;
+    const cCreatedCol = claimHeaderMap["created_at"] !== undefined ? claimHeaderMap["created_at"] : 15;
+    const cUpdatedCol = claimHeaderMap["updated_at"] !== undefined ? claimHeaderMap["updated_at"] : 16;
+
+    const targetJenis = (params.jenis_reimburst || "").toString().trim().toLowerCase();
+    const allClaims = [];
+
+    for (let i = 1; i < claimData.length; i++) {
+      const uId = (claimData[i][cUserIdCol] || "").toString().trim();
+      const pId = (claimData[i][cProgIdCol] || "").toString().trim();
+      const uInfo = userMap[uId] || { nama: "Jamaah", no_hp: "", nrp: "" };
+      const pInfo = progMap[pId] || { nama_program: "Program Reimburst", jenis_reimburst: "Umum" };
+
+      if (!targetJenis || pInfo.jenis_reimburst.toLowerCase() === targetJenis) {
+        allClaims.push({
+          claim_id: (claimData[i][cIdCol] || "").toString(),
+          user_id: uId,
+          nama_user: uInfo.nama,
+          no_hp: uInfo.no_hp,
+          nrp: uInfo.nrp,
+          program_id: pId,
+          nama_program: pInfo.nama_program,
+          jenis_reimburst: pInfo.jenis_reimburst,
+          tanggal_klaim: (claimData[i][cTglCol] || "").toString(),
+          jumlah_hak: Number(claimData[i][cHakCol]) || 0,
+          besar_klaim: Number(claimData[i][cBesarCol]) || 0,
+          nama_bank: (claimData[i][cBankCol] || "").toString(),
+          no_rekening: (claimData[i][cRekCol] || "").toString(),
+          komentar: (claimData[i][cKomenCol] || "").toString(),
+          lampiran_file_id: (claimData[i][cLampIdCol] || "").toString(),
+          lampiran_url: (claimData[i][cLampUrlCol] || "").toString(),
+          bukti_transfer_file_id: (claimData[i][cBuktiIdCol] || "").toString(),
+          bukti_transfer_url: (claimData[i][cBuktiUrlCol] || "").toString(),
+          status: (claimData[i][cStatusCol] || "submitted").toString().toLowerCase().trim(),
+          catatan_admin: (claimData[i][cCatatanCol] || "").toString(),
+          created_at: (claimData[i][cCreatedCol] || "").toString(),
+          updated_at: (claimData[i][cUpdatedCol] || "").toString()
+        });
+      }
+    }
+    allClaims.reverse();
+    return jsonResponse({ success: true, data: allClaims });
+  }
+
+  // 14.10 VERIFY CLAIM (Admin Only -> Status 'verified')
+  if (action === "verifyClaim") {
+    const claim_id = (params.claim_id || "").toString().trim();
+    if (!claim_id) return jsonResponse({ success: false, error: "Claim ID diperlukan" });
+    const sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+    if (!sheetClaims) return jsonResponse({ success: false, error: "Tabel klaim tidak ditemukan" });
+    const data = sheetClaims.getDataRange().getValues();
+    const headerMap = getHeaderMap(sheetClaims);
+    const idCol = headerMap["claim_id"] !== undefined ? headerMap["claim_id"] : 0;
+    const statusCol = headerMap["status"] !== undefined ? headerMap["status"] : 13;
+    const updatedCol = headerMap["updated_at"] !== undefined ? headerMap["updated_at"] : 16;
+
+    for (let i = 1; i < data.length; i++) {
+      if ((data[i][idCol] || "").toString().trim() === claim_id) {
+        sheetClaims.getRange(i + 1, statusCol + 1).setValue("verified");
+        if (updatedCol < sheetClaims.getLastColumn()) {
+          sheetClaims.getRange(i + 1, updatedCol + 1).setValue(new Date().toISOString());
+        }
+        SpreadsheetApp.flush();
+        return jsonResponse({ success: true, message: "Klaim berhasil diverifikasi dan disetujui untuk transfer" });
+      }
+    }
+    return jsonResponse({ success: false, error: "Klaim tidak ditemukan" });
+  }
+
+  // 14.11 REJECT CLAIM (Admin Only -> Status 'rejected' + Refund Poin)
+  if (action === "rejectClaim") {
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+    } catch (e) {
+      return jsonResponse({ success: false, error: "Server sedang sibuk, silakan ulangi beberapa saat lagi." });
+    }
+
+    try {
+      const claim_id = (params.claim_id || "").toString().trim();
+      const catatan_admin = (params.catatan_admin || "Pengajuan klaim ditolak").toString().trim();
+      if (!claim_id) return jsonResponse({ success: false, error: "Claim ID diperlukan" });
+
+      const sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+      const sheetUsers = ss.getSheetByName("users");
+      if (!sheetClaims) return jsonResponse({ success: false, error: "Tabel klaim tidak ditemukan" });
+
+      const claimData = sheetClaims.getDataRange().getValues();
+      const claimHeaderMap = getHeaderMap(sheetClaims);
+      const cIdCol = claimHeaderMap["claim_id"] !== undefined ? claimHeaderMap["claim_id"] : 0;
+      const cUserIdCol = claimHeaderMap["user_id"] !== undefined ? claimHeaderMap["user_id"] : 1;
+      const cBesarCol = claimHeaderMap["besar_klaim"] !== undefined ? claimHeaderMap["besar_klaim"] : 5;
+      const cStatusCol = claimHeaderMap["status"] !== undefined ? claimHeaderMap["status"] : 13;
+      const cCatatanCol = claimHeaderMap["catatan_admin"] !== undefined ? claimHeaderMap["catatan_admin"] : 14;
+      const cUpdatedCol = claimHeaderMap["updated_at"] !== undefined ? claimHeaderMap["updated_at"] : 16;
+
+      let targetUser = "";
+      let refundPoin = 0;
+      let claimRowIdx = -1;
+
+      for (let i = 1; i < claimData.length; i++) {
+        if ((claimData[i][cIdCol] || "").toString().trim() === claim_id) {
+          claimRowIdx = i + 1;
+          targetUser = (claimData[i][cUserIdCol] || "").toString().trim();
+          refundPoin = Number(claimData[i][cBesarCol]) || 0;
+          break;
+        }
+      }
+
+      if (claimRowIdx === -1) {
+        return jsonResponse({ success: false, error: "Data klaim tidak ditemukan" });
+      }
+
+      // Update status klaim & catatan penolakan
+      sheetClaims.getRange(claimRowIdx, cStatusCol + 1).setValue("rejected");
+      sheetClaims.getRange(claimRowIdx, cCatatanCol + 1).setValue(catatan_admin);
+      if (cUpdatedCol < sheetClaims.getLastColumn()) {
+        sheetClaims.getRange(claimRowIdx, cUpdatedCol + 1).setValue(new Date().toISOString());
+      }
+
+      // Kembalikan poin ke saldo jamaah
+      if (refundPoin > 0 && targetUser && sheetUsers) {
+        const uData = sheetUsers.getDataRange().getValues();
+        const uMap = getHeaderMap(sheetUsers);
+        const uIdCol = uMap["user_id"] !== undefined ? uMap["user_id"] : 0;
+        const uPoinCol = uMap["total_poin"] !== undefined ? uMap["total_poin"] : 4;
+
+        for (let j = 1; j < uData.length; j++) {
+          if ((uData[j][uIdCol] || "").toString().trim() === targetUser) {
+            const currentPoin = Number(uData[j][uPoinCol]) || 0;
+            sheetUsers.getRange(j + 1, uPoinCol + 1).setValue(currentPoin + refundPoin);
+            break;
+          }
+        }
+      }
+
+      SpreadsheetApp.flush();
+      return jsonResponse({
+        success: true,
+        message: "Klaim berhasil ditolak dan saldo poin telah dikembalikan ke jamaah.",
+        refunded_poin: refundPoin
+      });
+    } catch (err) {
+      return jsonResponse({ success: false, error: "Gagal menolak klaim: " + err.toString() });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  // 14.12 UPLOAD TRANSFER PROOF (Admin Only -> Status 'transferred')
+  if (action === "uploadTransferProof") {
+    const claim_id = (params.claim_id || "").toString().trim();
+    const file_base64 = params.file_base64 || "";
+    const file_name = params.file_name || ("bukti_tf_" + claim_id + ".jpg");
+
+    if (!claim_id) return jsonResponse({ success: false, error: "Claim ID diperlukan" });
+    if (!file_base64) return jsonResponse({ success: false, error: "File bukti transfer wajib diunggah" });
+
+    const sheetClaims = getSheetCaseInsensitive(ss, "reimburst_claim");
+    if (!sheetClaims) return jsonResponse({ success: false, error: "Tabel klaim tidak ditemukan" });
+    const claimData = sheetClaims.getDataRange().getValues();
+    const claimHeaderMap = getHeaderMap(sheetClaims);
+
+    const cIdCol = claimHeaderMap["claim_id"] !== undefined ? claimHeaderMap["claim_id"] : 0;
+    const cBuktiIdCol = claimHeaderMap["bukti_transfer_file_id"] !== undefined ? claimHeaderMap["bukti_transfer_file_id"] : 11;
+    const cBuktiUrlCol = claimHeaderMap["bukti_transfer_url"] !== undefined ? claimHeaderMap["bukti_transfer_url"] : 12;
+    const cStatusCol = claimHeaderMap["status"] !== undefined ? claimHeaderMap["status"] : 13;
+    const cUpdatedCol = claimHeaderMap["updated_at"] !== undefined ? claimHeaderMap["updated_at"] : 16;
+
+    let claimRowIdx = -1;
+    for (let i = 1; i < claimData.length; i++) {
+      if ((claimData[i][cIdCol] || "").toString().trim() === claim_id) {
+        claimRowIdx = i + 1;
+        break;
+      }
+    }
+
+    if (claimRowIdx === -1) {
+      return jsonResponse({ success: false, error: "Data klaim tidak ditemukan" });
+    }
+
+    // Upload bukti transfer ke Google Drive
+    const uploadRes = saveBase64ToDrive(file_base64, file_name, "Reimburse Al Hijrah");
+    if (!uploadRes.fileUrl) {
+      return jsonResponse({ success: false, error: "Gagal menyimpan file ke Google Drive: " + (uploadRes.error || "Unknown error") });
+    }
+
+    // Update row klaim
+    sheetClaims.getRange(claimRowIdx, cBuktiIdCol + 1).setValue(uploadRes.fileId);
+    sheetClaims.getRange(claimRowIdx, cBuktiUrlCol + 1).setValue(uploadRes.fileUrl);
+    sheetClaims.getRange(claimRowIdx, cStatusCol + 1).setValue("transferred");
+    if (cUpdatedCol < sheetClaims.getLastColumn()) {
+      sheetClaims.getRange(claimRowIdx, cUpdatedCol + 1).setValue(new Date().toISOString());
+    }
+
+    SpreadsheetApp.flush();
+    return jsonResponse({
+      success: true,
+      message: "Bukti transfer berhasil disimpan. Status klaim kini Ditransfer.",
+      data: {
+        claim_id: claim_id,
+        status: "transferred",
+        bukti_transfer_url: uploadRes.fileUrl
+      }
+    });
   }
   
   return jsonResponse({ success: false, error: "Aksi '" + action + "' tidak dikenali" });

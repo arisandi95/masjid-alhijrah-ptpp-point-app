@@ -1,4 +1,21 @@
-import { ApiResponse, EventReview, EventReviewInput, JenisKelamin, MasterEvent, ScanLog, ScanResult, StatusJamaah, User, Company, Unit, VideoItem, VideoInput } from '../types';
+import {
+  ApiResponse,
+  EventReview,
+  EventReviewInput,
+  JenisKelamin,
+  MasterEvent,
+  ScanLog,
+  ScanResult,
+  StatusJamaah,
+  User,
+  Company,
+  Unit,
+  VideoItem,
+  VideoInput,
+  ReimburstProgram,
+  ReimburstClaim,
+  MasterBank,
+} from '../types';
 import {
   DEFAULT_USERS,
   getGasUrl,
@@ -12,8 +29,80 @@ import {
   saveLocalReviews,
   saveLocalUsers,
   saveLocalVideos,
+  getLocalPrograms,
+  saveLocalPrograms,
+  getLocalClaims,
+  saveLocalClaims,
+  getLocalBanks,
+  saveLocalBanks,
 } from './mockStorage';
 import { extractYouTubeId } from '../utils/youtubeUtils';
+
+// Helper kompresi dan encode file (Gambar diperkecil otomatis agar cepat terkirim ke GAS & Google Drive)
+export async function compressAndEncodeFile(
+  file: File,
+  maxWidth = 1280,
+  quality = 0.8
+): Promise<{ base64: string; fileName: string; sizeKB: number }> {
+  if (!file.type.startsWith('image/')) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const fullBase64 = reader.result as string;
+        const cleanBase64 = fullBase64.includes(';base64,')
+          ? fullBase64.split(';base64,')[1]
+          : fullBase64;
+        resolve({
+          base64: cleanBase64,
+          fileName: file.name,
+          sizeKB: Math.round(file.size / 1024),
+        });
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas tidak dapat diakses'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        const cleanBase64 = dataUrl.split(';base64,')[1];
+        const estimatedSizeKB = Math.round((cleanBase64.length * 3) / 4 / 1024);
+
+        resolve({
+          base64: cleanBase64,
+          fileName: file.name.replace(/\.[^/.]+$/, '') + '.jpg',
+          sizeKB: estimatedSizeKB,
+        });
+      };
+      img.onerror = (err) => reject(err);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
 
 // Format Phone Helper: Ensure 62xxxxxxxxxx
 export function formatPhoneNumber(phone: string): string {
@@ -91,6 +180,9 @@ async function callGasApi<T>(action: string, payload: Record<string, any> = {}, 
     });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('text/html') || !res.ok) {
+      if (payload && (payload.file_base64 || payload.fileBase64)) {
+        throw new Error('Gagal mengirim file ke Google Apps Script (Server merespons bukan JSON). Pastikan Web App di-deploy dengan akses Anyone.');
+      }
       return await executeGet();
     }
     const json = await res.json();
@@ -114,7 +206,10 @@ async function callGasApi<T>(action: string, payload: Record<string, any> = {}, 
     } else {
       try {
         return await executePost();
-      } catch {
+      } catch (postErr) {
+        if (payload && (payload.file_base64 || payload.fileBase64)) {
+          throw postErr;
+        }
         return await executeGet();
       }
     }
@@ -158,6 +253,7 @@ export const api = {
     pin: string,
     role: 'user' | 'admin' = 'user',
     details?: {
+      nrp?: string;
       email?: string;
       tanggal_lahir?: string;
       jenis_kelamin?: JenisKelamin;
@@ -169,6 +265,7 @@ export const api = {
   ): Promise<ApiResponse<User>> {
     const formattedPhone = formatPhoneNumber(no_hp);
     const cleanPin = pin.trim();
+    const cleanNrp = details?.nrp?.trim() || '';
     const email = details?.email?.trim() || '';
     const tanggal_lahir = details?.tanggal_lahir?.trim() || '';
     const jenis_kelamin = details?.jenis_kelamin || 'pria';
@@ -177,12 +274,20 @@ export const api = {
     const company_id = details?.company_id;
     const unit_id = details?.unit_id;
 
+    if (!cleanNrp) {
+      return { success: false, error: 'Nomor NRP wajib diisi.' };
+    }
+    if (cleanNrp.length > 16) {
+      return { success: false, error: 'Nomor NRP maksimal 16 karakter.' };
+    }
+
     // Try Google Apps Script if URL is configured
     if (getGasUrl()) {
       try {
         const gasResult = await callGasApi<User>('register', {
           nama: nama.trim(),
           no_hp: formattedPhone,
+          nrp: cleanNrp,
           pin: cleanPin, // PIN plain text tanpa enkripsi sesuai instruksi
           email,
           tanggal_lahir,
@@ -205,11 +310,19 @@ export const api = {
     await new Promise((r) => setTimeout(r, 450)); // simulate smooth network
     const users = getLocalUsers();
 
-    const existing = users.find((u) => u.no_hp === formattedPhone);
-    if (existing) {
+    const existingPhone = users.find((u) => u.no_hp === formattedPhone);
+    if (existingPhone) {
       return {
         success: false,
         error: 'Nomor HP sudah terdaftar. Silakan login menggunakan nomor ini.',
+      };
+    }
+
+    const existingNrp = users.find((u) => u.nrp && u.nrp.toLowerCase() === cleanNrp.toLowerCase());
+    if (existingNrp) {
+      return {
+        success: false,
+        error: `NRP ${cleanNrp} sudah terdaftar. Gunakan NRP Anda sendiri.`,
       };
     }
 
@@ -217,6 +330,7 @@ export const api = {
       user_id: 'usr_' + Date.now(),
       nama: nama.trim(),
       no_hp: formattedPhone,
+      nrp: cleanNrp,
       email,
       tanggal_lahir,
       jenis_kelamin,
@@ -238,6 +352,45 @@ export const api = {
       data: newUser,
       message: 'Registrasi berhasil! Selamat datang di Masjid Al Hijrah PTPP.',
     };
+  },
+
+  // 1.5 UPDATE NRP (Melengkapi data NRP user lama)
+  async updateNrp(userId: string, nrp: string): Promise<ApiResponse<string>> {
+    const cleanNrp = nrp.trim();
+    if (!cleanNrp) return { success: false, error: 'NRP wajib diisi' };
+    if (cleanNrp.length > 16) return { success: false, error: 'NRP maksimal 16 karakter' };
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<string>('updateNrp', { user_id: userId, nrp: cleanNrp }, true);
+        if (res.success) {
+          const users = getLocalUsers();
+          const target = users.find((u) => u.user_id === userId);
+          if (target) {
+            target.nrp = cleanNrp;
+            saveLocalUsers(users);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS updateNrp error:', e);
+      }
+    }
+
+    const users = getLocalUsers();
+    const duplicate = users.find(
+      (u) => u.user_id !== userId && u.nrp && u.nrp.toLowerCase() === cleanNrp.toLowerCase()
+    );
+    if (duplicate) {
+      return { success: false, error: `NRP ${cleanNrp} sudah digunakan oleh jamaah lain` };
+    }
+    const target = users.find((u) => u.user_id === userId);
+    if (target) {
+      target.nrp = cleanNrp;
+      saveLocalUsers(users);
+      return { success: true, data: cleanNrp, message: 'NRP berhasil diperbarui!' };
+    }
+    return { success: false, error: 'User tidak ditemukan' };
   },
 
   // 2. LOGIN
@@ -1066,5 +1219,481 @@ export const api = {
       data: true,
       message: 'Video kajian berhasil dihapus.',
     };
+  },
+
+  // =========================================================================
+  // 16. FITUR REIMBURST MULTI-JENIS
+  // =========================================================================
+
+  // 16.1 GET REIMBURST JENIS LIST
+  async getReimburstJenisList(): Promise<ApiResponse<{ jenis_reimburst: string; program_count: number }[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<{ jenis_reimburst: string; program_count: number }[]>('getReimburstJenisList');
+        if (res.success && Array.isArray(res.data)) {
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getReimburstJenisList error:', e);
+      }
+    }
+
+    const programs = getLocalPrograms().filter((p) => p.status === 'active');
+    const map: Record<string, { jenis_reimburst: string; program_count: number }> = {};
+    for (const p of programs) {
+      const key = p.jenis_reimburst.trim().toLowerCase();
+      if (!map[key]) {
+        map[key] = { jenis_reimburst: p.jenis_reimburst.trim(), program_count: 1 };
+      } else {
+        map[key].program_count++;
+      }
+    }
+    return { success: true, data: Object.values(map) };
+  },
+
+  // 16.2 GET REIMBURST PROGRAMS (Active)
+  async getReimburstPrograms(jenis?: string): Promise<ApiResponse<ReimburstProgram[]>> {
+    if (getGasUrl()) {
+      try {
+        const payload: Record<string, any> = {};
+        if (jenis) payload.jenis_reimburst = jenis;
+        const res = await callGasApi<ReimburstProgram[]>('getReimburstPrograms', payload);
+        if (res.success && Array.isArray(res.data)) {
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getReimburstPrograms error:', e);
+      }
+    }
+
+    let programs = getLocalPrograms().filter((p) => p.status === 'active');
+    if (jenis) {
+      const target = jenis.trim().toLowerCase();
+      programs = programs.filter((p) => p.jenis_reimburst.trim().toLowerCase() === target);
+    }
+    return { success: true, data: programs };
+  },
+
+  // 16.3 GET ALL REIMBURST PROGRAMS (Admin)
+  async getAllReimburstPrograms(): Promise<ApiResponse<ReimburstProgram[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<ReimburstProgram[]>('getAllReimburstPrograms');
+        if (res.success && Array.isArray(res.data)) {
+          saveLocalPrograms(res.data);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getAllReimburstPrograms error:', e);
+      }
+    }
+    const programs = getLocalPrograms();
+    return { success: true, data: programs };
+  },
+
+  // 16.4 ADD REIMBURST PROGRAM (Admin)
+  async addReimburstProgram(payload: {
+    jenis_reimburst: string;
+    nama_program: string;
+    tanggal_mulai: string;
+    tanggal_selesai: string;
+    maks_persen_reimburst: number;
+  }): Promise<ApiResponse<ReimburstProgram>> {
+    const rawJenis = payload.jenis_reimburst.trim();
+    const namaProgram = payload.nama_program.trim();
+
+    if (!rawJenis) return { success: false, error: 'Jenis / kategori reimburst wajib diisi' };
+    if (!namaProgram) return { success: false, error: 'Nama program wajib diisi' };
+
+    // Format Title Case
+    const normalizedJenis = rawJenis.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1));
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<ReimburstProgram>('addReimburstProgram', {
+          jenis_reimburst: normalizedJenis,
+          nama_program: namaProgram,
+          tanggal_mulai: payload.tanggal_mulai,
+          tanggal_selesai: payload.tanggal_selesai,
+          maks_persen_reimburst: payload.maks_persen_reimburst,
+        }, true);
+        if (res.success && res.data) {
+          const current = getLocalPrograms();
+          saveLocalPrograms([res.data, ...current]);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS addReimburstProgram error:', e);
+      }
+    }
+
+    const newProg: ReimburstProgram = {
+      program_id: 'prog_' + Date.now(),
+      jenis_reimburst: normalizedJenis,
+      nama_program: namaProgram,
+      tanggal_mulai: payload.tanggal_mulai,
+      tanggal_selesai: payload.tanggal_selesai,
+      maks_persen_reimburst: payload.maks_persen_reimburst,
+      status: 'active',
+      created_at: new Date().toISOString(),
+    };
+
+    const current = getLocalPrograms();
+    saveLocalPrograms([newProg, ...current]);
+
+    return {
+      success: true,
+      data: newProg,
+      message: 'Program reimburst berhasil ditambahkan!',
+    };
+  },
+
+  // 16.5 TOGGLE REIMBURST PROGRAM STATUS (Admin)
+  async toggleReimburstProgram(programId: string, status: 'active' | 'inactive'): Promise<ApiResponse<boolean>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<boolean>('toggleReimburstProgram', {
+          program_id: programId,
+          status,
+        }, true);
+        if (res.success) {
+          const current = getLocalPrograms();
+          const target = current.find((p) => p.program_id === programId);
+          if (target) {
+            target.status = status;
+            saveLocalPrograms(current);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS toggleReimburstProgram error:', e);
+      }
+    }
+
+    const current = getLocalPrograms();
+    const target = current.find((p) => p.program_id === programId);
+    if (target) {
+      target.status = status;
+      saveLocalPrograms(current);
+      return { success: true, data: true, message: `Status program berhasil diubah menjadi ${status}` };
+    }
+    return { success: false, error: 'Program tidak ditemukan' };
+  },
+
+  // 16.6 GET MASTER BANK
+  async getBankList(): Promise<ApiResponse<MasterBank[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<MasterBank[]>('getBankList');
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          saveLocalBanks(res.data);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getBankList error:', e);
+      }
+    }
+    const banks = getLocalBanks();
+    return { success: true, data: banks.filter((b) => b.status === 'active') };
+  },
+
+  // 16.7 SUBMIT CLAIM (Jamaah)
+  async submitClaim(payload: {
+    userId: string;
+    programId: string;
+    besarKlaim: number;
+    namaBank: string;
+    noRekening: string;
+    komentar?: string;
+    fileBase64?: string;
+    fileName?: string;
+  }): Promise<ApiResponse<ReimburstClaim>> {
+    const { userId, programId, besarKlaim, namaBank, noRekening, komentar, fileBase64, fileName } = payload;
+
+    if (besarKlaim <= 0) {
+      return { success: false, error: 'Besar klaim harus lebih dari Rp 0' };
+    }
+    if (!namaBank.trim() || !noRekening.trim()) {
+      return { success: false, error: 'Pilih bank dan isi nomor rekening transfer dengan lengkap.' };
+    }
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<ReimburstClaim>('submitClaim', {
+          user_id: userId,
+          program_id: programId,
+          besar_klaim: besarKlaim,
+          nama_bank: namaBank.trim(),
+          no_rekening: noRekening.trim(),
+          komentar: komentar?.trim() || '',
+          file_base64: fileBase64 || '',
+          file_name: fileName || `kuitansi_${Date.now()}.jpg`,
+        }, true);
+        if (res.success && res.data) {
+          // Sync local storage points and claims
+          const users = getLocalUsers();
+          const targetUser = users.find((u) => u.user_id === userId);
+          if (targetUser) {
+            targetUser.total_poin = Math.max(0, targetUser.total_poin - besarKlaim);
+            saveLocalUsers(users);
+          }
+          const currentClaims = getLocalClaims();
+          saveLocalClaims([res.data, ...currentClaims]);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') {
+          return { success: false, error: e.message || 'Gagal mengirim pengajuan klaim ke server.' };
+        }
+      }
+    }
+
+    // Local / Offline fallback
+    const users = getLocalUsers();
+    const user = users.find((u) => u.user_id === userId);
+    if (!user) return { success: false, error: 'User tidak ditemukan' };
+
+    const programs = getLocalPrograms();
+    const program = programs.find((p) => p.program_id === programId);
+    if (!program) return { success: false, error: 'Program reimburst tidak ditemukan' };
+
+    const jumlahHak = Math.floor(user.total_poin * (program.maks_persen_reimburst / 100));
+    if (besarKlaim > jumlahHak) {
+      return {
+        success: false,
+        error: `Besar klaim (Rp ${besarKlaim.toLocaleString('id-ID')}) melebihi hak klaim Anda (Rp ${jumlahHak.toLocaleString('id-ID')}).`,
+      };
+    }
+    if (besarKlaim > user.total_poin) {
+      return { success: false, error: 'Saldo poin tidak mencukupi.' };
+    }
+
+    // Deduct points
+    user.total_poin -= besarKlaim;
+    saveLocalUsers(users);
+
+    const newClaim: ReimburstClaim = {
+      claim_id: 'clm_' + Date.now(),
+      user_id: userId,
+      program_id: programId,
+      tanggal_klaim: new Date().toISOString().split('T')[0],
+      jumlah_hak: jumlahHak,
+      besar_klaim: besarKlaim,
+      nama_bank: namaBank.trim(),
+      no_rekening: noRekening.trim(),
+      komentar: komentar?.trim() || '',
+      lampiran_url: fileBase64
+        ? `data:image/jpeg;base64,${fileBase64}`
+        : 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=800&q=80',
+      lampiran_file_id: 'mock_drive_file_' + Date.now(),
+      status: 'submitted',
+      created_at: new Date().toISOString(),
+      nama_user: user.nama,
+      nrp: user.nrp,
+      no_hp: user.no_hp,
+      nama_program: program.nama_program,
+      jenis_reimburst: program.jenis_reimburst,
+    };
+
+    const currentClaims = getLocalClaims();
+    saveLocalClaims([newClaim, ...currentClaims]);
+
+    return {
+      success: true,
+      data: newClaim,
+      message: 'Pengajuan klaim berhasil dikirim! Saldo poin Anda telah terpotong sementara.',
+    };
+  },
+
+  // 16.8 GET MY CLAIMS
+  async getMyClaims(userId: string): Promise<ApiResponse<ReimburstClaim[]>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<ReimburstClaim[]>('getMyClaims', { user_id: userId });
+        if (res.success && Array.isArray(res.data)) {
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getMyClaims error:', e);
+      }
+    }
+
+    const claims = getLocalClaims().filter((c) => c.user_id === userId);
+    const programs = getLocalPrograms();
+    const joined = claims.map((c) => {
+      const prog = programs.find((p) => p.program_id === c.program_id);
+      return {
+        ...c,
+        nama_program: c.nama_program || prog?.nama_program || 'Program Reimburst',
+        jenis_reimburst: c.jenis_reimburst || prog?.jenis_reimburst || 'Umum',
+      };
+    });
+    return { success: true, data: joined };
+  },
+
+  // 16.9 GET ALL CLAIMS (Admin)
+  async getAllClaims(jenisFilter?: string): Promise<ApiResponse<ReimburstClaim[]>> {
+    if (getGasUrl()) {
+      try {
+        const payload: Record<string, any> = {};
+        if (jenisFilter) payload.jenis_reimburst = jenisFilter;
+        const res = await callGasApi<ReimburstClaim[]>('getAllClaims', payload);
+        if (res.success && Array.isArray(res.data)) {
+          saveLocalClaims(res.data);
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS getAllClaims error:', e);
+      }
+    }
+
+    let claims = getLocalClaims();
+    if (jenisFilter) {
+      const target = jenisFilter.trim().toLowerCase();
+      claims = claims.filter((c) => (c.jenis_reimburst || '').trim().toLowerCase() === target);
+    }
+    return { success: true, data: claims };
+  },
+
+  // 16.10 VERIFY CLAIM (Admin)
+  async verifyClaim(claimId: string): Promise<ApiResponse<boolean>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<boolean>('verifyClaim', { claim_id: claimId }, true);
+        if (res.success) {
+          const claims = getLocalClaims();
+          const target = claims.find((c) => c.claim_id === claimId);
+          if (target) {
+            target.status = 'verified';
+            target.updated_at = new Date().toISOString();
+            saveLocalClaims(claims);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS verifyClaim error:', e);
+      }
+    }
+
+    const claims = getLocalClaims();
+    const target = claims.find((c) => c.claim_id === claimId);
+    if (target) {
+      target.status = 'verified';
+      target.updated_at = new Date().toISOString();
+      saveLocalClaims(claims);
+      return { success: true, data: true, message: 'Klaim disetujui untuk transfer dana.' };
+    }
+    return { success: false, error: 'Klaim tidak ditemukan' };
+  },
+
+  // 16.11 REJECT CLAIM (Admin)
+  async rejectClaim(claimId: string, catatanAdmin: string): Promise<ApiResponse<boolean>> {
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<boolean>('rejectClaim', {
+          claim_id: claimId,
+          catatan_admin: catatanAdmin,
+        }, true);
+        if (res.success) {
+          const claims = getLocalClaims();
+          const target = claims.find((c) => c.claim_id === claimId);
+          if (target) {
+            target.status = 'rejected';
+            target.catatan_admin = catatanAdmin;
+            target.updated_at = new Date().toISOString();
+            // Refund points locally
+            const users = getLocalUsers();
+            const user = users.find((u) => u.user_id === target.user_id);
+            if (user) {
+              user.total_poin += target.besar_klaim;
+              saveLocalUsers(users);
+            }
+            saveLocalClaims(claims);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS rejectClaim error:', e);
+      }
+    }
+
+    const claims = getLocalClaims();
+    const target = claims.find((c) => c.claim_id === claimId);
+    if (target) {
+      target.status = 'rejected';
+      target.catatan_admin = catatanAdmin;
+      target.updated_at = new Date().toISOString();
+
+      // Kembalikan poin ke jamaah
+      const users = getLocalUsers();
+      const user = users.find((u) => u.user_id === target.user_id);
+      if (user) {
+        user.total_poin += target.besar_klaim;
+        saveLocalUsers(users);
+      }
+      saveLocalClaims(claims);
+
+      return {
+        success: true,
+        data: true,
+        message: 'Klaim ditolak dan saldo poin berhasil dikembalikan ke jamaah.',
+      };
+    }
+    return { success: false, error: 'Klaim tidak ditemukan' };
+  },
+
+  // 16.12 UPLOAD TRANSFER PROOF (Admin)
+  async uploadTransferProof(
+    claimId: string,
+    fileBase64: string,
+    fileName?: string
+  ): Promise<ApiResponse<{ claim_id: string; bukti_transfer_url: string }>> {
+    if (!fileBase64) return { success: false, error: 'File bukti transfer wajib dipilih' };
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<{ claim_id: string; bukti_transfer_url: string }>('uploadTransferProof', {
+          claim_id: claimId,
+          file_base64: fileBase64,
+          file_name: fileName || `bukti_transfer_${claimId}.jpg`,
+        }, true);
+        if (res.success && res.data) {
+          const claims = getLocalClaims();
+          const target = claims.find((c) => c.claim_id === claimId);
+          if (target) {
+            target.status = 'transferred';
+            target.bukti_transfer_url = res.data.bukti_transfer_url;
+            target.updated_at = new Date().toISOString();
+            saveLocalClaims(claims);
+          }
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') console.warn('GAS uploadTransferProof error:', e);
+      }
+    }
+
+    const proofUrl = fileBase64.startsWith('data:')
+      ? fileBase64
+      : `data:image/jpeg;base64,${fileBase64}`;
+
+    const claims = getLocalClaims();
+    const target = claims.find((c) => c.claim_id === claimId);
+    if (target) {
+      target.status = 'transferred';
+      target.bukti_transfer_url = proofUrl;
+      target.updated_at = new Date().toISOString();
+      saveLocalClaims(claims);
+
+      return {
+        success: true,
+        data: {
+          claim_id: claimId,
+          bukti_transfer_url: proofUrl,
+        },
+        message: 'Bukti transfer berhasil disimpan dan status klaim menjadi Ditransfer.',
+      };
+    }
+    return { success: false, error: 'Klaim tidak ditemukan' };
   },
 };

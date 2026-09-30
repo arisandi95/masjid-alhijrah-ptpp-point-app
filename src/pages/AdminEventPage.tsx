@@ -34,6 +34,7 @@ import {
   Video as VideoIcon,
   Trash2,
   Play,
+  Wallet,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -41,10 +42,11 @@ import { MasterEvent, ScanLog, User, EventReview, VideoItem, ALL_DATABASE_SCHEMA
 import { getGasUrl, setGasUrl, getEnvGasUrl, getCustomGasUrl, resetGasUrl } from '../services/mockStorage';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../services/gasScript';
 import { extractYouTubeId, getYouTubeThumbnail, getYouTubeEmbedUrl } from '../utils/youtubeUtils';
+import { AdminReimburstSection } from '../components/admin/AdminReimburstSection';
 
 export const AdminEventPage: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'events' | 'videos' | 'penilaian' | 'rekap' | 'sheets'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'videos' | 'reimburst' | 'penilaian' | 'rekap' | 'sheets'>('events');
   const [eventViewMode, setEventViewMode] = useState<'table' | 'cards'>('table');
   const [events, setEvents] = useState<MasterEvent[]>([]);
   const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -442,6 +444,54 @@ export const AdminEventPage: React.FC = () => {
                 }`}
               >
                 Embed YouTube
+              </span>
+            </div>
+          </button>
+
+          {/* Tab 3: Reimburst Poin & Klaim Multi-Jenis */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('reimburst')}
+            className={`group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all duration-200 cursor-pointer text-left ${
+              activeTab === 'reimburst'
+                ? 'bg-gradient-to-br from-[#0F6B4C] to-[#0A4D36] text-white shadow-sm ring-2 ring-[#0F6B4C]/25 sm:-translate-y-0.5'
+                : 'bg-white text-[#2D3748] border border-gray-200/80 hover:border-[#0F6B4C]/40 hover:bg-[#F4F8F5] shadow-2xs'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors ${
+                  activeTab === 'reimburst'
+                    ? 'bg-white/20 text-[#FAF3D1]'
+                    : 'bg-amber-50 text-amber-700 group-hover:bg-amber-100/80'
+                }`}
+              >
+                <Wallet className="w-4 h-4 shrink-0 stroke-[2.2]" />
+              </div>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md transition-colors ${
+                  activeTab === 'reimburst'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                Baru
+              </span>
+            </div>
+            <div className="mt-2.5 sm:mt-3">
+              <span
+                className={`block font-bold text-xs sm:text-[13px] leading-tight ${
+                  activeTab === 'reimburst' ? 'text-white' : 'text-[#1F2A24] group-hover:text-[#0F6B4C]'
+                }`}
+              >
+                Reimburse
+              </span>
+              <span
+                className={`block text-[10px] mt-0.5 leading-normal ${
+                  activeTab === 'reimburst' ? 'text-emerald-100/90' : 'text-[#6B7568]'
+                }`}
+              >
+                Program & Klaim
               </span>
             </div>
           </button>
@@ -1042,6 +1092,11 @@ export const AdminEventPage: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 3: REIMBURST POIN & KLAIM MULTI-JENIS */}
+      {activeTab === 'reimburst' && (
+        <AdminReimburstSection />
+      )}
+
       {/* TAB 2: PENILAIAN ACARA (FEEDBACK & EVALUASI JAMAAH) */}
       {activeTab === 'penilaian' && (
         <div className="space-y-4">
@@ -1393,21 +1448,39 @@ export const AdminEventPage: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-[#6B7568] leading-relaxed">
-              Salin kode ini ke editor Apps Script Google Spreadsheet Anda, lalu deploy sebagai Web App dengan opsi:
+              Salin kode terbaru ini ke editor Apps Script Google Spreadsheet Anda, lalu ikuti 2 langkah wajib berikut agar Google Drive & Database aktif sepenuhnya:
             </p>
 
-            <div className="bg-[#FAFAF7] p-3 rounded-xl border border-gray-100 text-[11px] text-[#1F2A24] space-y-1">
-              <p>• <strong>Execute as:</strong> "Me" (email Anda)</p>
-              <p>• <strong>Who has access:</strong> "Anyone" (Siapa saja)</p>
-              <p>• Script otomatis membuat / mengelola 4 sheet:
-                <br />&nbsp;&nbsp;1. <code>users</code>: [user_id, nama, no_hp, <strong>email</strong>, <strong>tanggal_lahir</strong>, <strong>jenis_kelamin</strong>, <strong>status_jamaah</strong>, <strong>pin</strong>, total_poin, <strong>role</strong>, created_at]
-                <br />&nbsp;&nbsp;2. <code>master_event</code>: [event_id, nama_event, tanggal, qr_token, poin_value, status, <strong>pemateri</strong>, <strong>waktu</strong>, <strong>lokasi</strong>, <strong>event_type</strong>, <strong>kuota</strong>, created_at]
-                <br />&nbsp;&nbsp;3. <code>scan_log</code>: [log_id, user_id, event_id, poin_didapat, scanned_at]
-                <br />&nbsp;&nbsp;4. <code>penilaian_acara</code>: [review_id, user_id, event_id, nama_jamaah, nama_event, skor_materi, skor_kenyamanan, skor_sound, skor_panitia, kesan_terbaik, hal_kurang, usulan_kegiatan, submitted_at]
-              </p>
-              <p className="text-[10px] text-emerald-700 font-medium pt-1">
-                ✓ Seluruh field terdefinisi dan tersentralisasi dalam file tunggal: <code>src/types/databaseSchema.ts</code>.
-              </p>
+            <div className="space-y-2.5">
+              {/* Box 1: Langkah Otorisasi Google Drive */}
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 text-xs text-[#1F2A24] space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-900 flex items-center justify-center text-[10px]">1</span>
+                  <span>Otorisasi Akses Google Drive (Wajib agar lampiran_url tersimpan):</span>
+                </div>
+                <ol className="list-decimal list-inside text-[11px] text-amber-950 space-y-1 pl-1 leading-relaxed">
+                  <li>Di editor Apps Script, pada dropdown fungsi di samping tombol Debug/Run, pilih <strong>testDriveAuth</strong>.</li>
+                  <li>Klik tombol <strong>"Run" (Jalankan)</strong> 1 kali.</li>
+                  <li>Akan muncul popup <strong>"Authorization Required" (Otorisasi Diperlukan)</strong> &rarr; Klik <strong>"Review Permissions" (Tinjau Izin)</strong>.</li>
+                  <li>Pilih akun Google Takmir Anda &rarr; Klik <strong>"Advanced" (Lanjutan)</strong> di kiri bawah &rarr; Klik <strong>"Go to ... (unsafe)"</strong> &rarr; Klik <strong>"Allow" (Izinkan)</strong>.</li>
+                  <li>Setelah selesai, script memiliki izin resmi untuk membuat folder otomatis <code>Reimburse Al Hijrah</code> dan menyimpan foto nota klaim ke Google Drive!</li>
+                </ol>
+              </div>
+
+              {/* Box 2: Langkah Deploy Versi Baru */}
+              <div className="bg-[#FAFAF7] p-3.5 rounded-2xl border border-gray-200 text-xs text-[#1F2A24] space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-[#0F6B4C]">
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 text-[#0F6B4C] flex items-center justify-center text-[10px]">2</span>
+                  <span>Terapkan Pembaruan (Deploy Versi Baru):</span>
+                </div>
+                <ul className="text-[11px] text-[#4A5568] space-y-1 pl-1 leading-relaxed">
+                  <li>• Klik tombol <strong>Deploy (Terapkan)</strong> di pojok kanan atas &rarr; Pilih <strong>"Manage deployments" (Kelola penerapan)</strong>.</li>
+                  <li>• Klik ikon <strong>Pensil (Edit)</strong> pada penerapan Web App Anda.</li>
+                  <li>• Pada bagian <strong>Version (Versi)</strong>: ubah menjadi <strong>"New version" (Versi baru)</strong>.</li>
+                  <li>• Pastikan <strong>Execute as:</strong> "Me" (email Anda) dan <strong>Who has access:</strong> "Anyone" (Siapa saja).</li>
+                  <li>• Klik <strong>Deploy (Terapkan)</strong>. Selesai! Web App kini menjalankan fitur Reimburse & Google Drive terbaru.</li>
+                </ul>
+              </div>
             </div>
           </div>
 

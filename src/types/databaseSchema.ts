@@ -64,6 +64,68 @@ export interface User {
   total_poin: number;       // Saldo total poin jamaah saat ini (default: 0)
   role: UserRole;           // 'user' (jamaah biasa) | 'admin' (pengurus DKM)
   created_at: string;       // Timestamp pendaftaran (ISO 8601)
+  nrp?: string;             // Nomor Registrasi Pokok / Karyawan (maks 16 karakter, unik)
+}
+
+/**
+ * Tabel: `master_reimburst_program`
+ * Menyimpan program reimburst multi-jenis yang dibuat oleh Admin
+ */
+export interface ReimburstProgram {
+  program_id: string;             // Primary Key unik (contoh: 'prog_1712000001')
+  jenis_reimburst: string;        // Kategori/jenis reimburst (misal: "Pendidikan Anak", "Kesehatan", "Pernikahan")
+  nama_program: string;           // Judul program (misal: "Reimburst SPP & Sekolah - Semester Genap 2026")
+  tanggal_mulai: string;          // Awal periode berlaku (YYYY-MM-DD)
+  tanggal_selesai: string;        // Akhir periode berlaku (YYYY-MM-DD)
+  maks_persen_reimburst: number;  // % maksimal saldo poin yang dapat direimburst (1 - 100)
+  status: 'active' | 'inactive';  // Status keaktifan program
+  created_at: string;             // Timestamp pembuatan program (ISO 8601)
+}
+
+/**
+ * Status Alur Pengajuan Klaim Reimburst
+ */
+export type ReimburstClaimStatus = 'submitted' | 'verified' | 'rejected' | 'transferred';
+
+/**
+ * Tabel: `reimburst_claim`
+ * Menyimpan transaksi klaim poin jamaah beserta lampiran dan bukti transfer Google Drive
+ */
+export interface ReimburstClaim {
+  claim_id: string;               // Primary Key unik (contoh: 'clm_1712000001')
+  user_id: string;                // FK ke users.user_id
+  program_id: string;             // FK ke master_reimburst_program.program_id
+  tanggal_klaim: string;          // Tanggal diajukan oleh jamaah (YYYY-MM-DD)
+  jumlah_hak: number;             // Maksimum nominal hak klaim (Rp) = maks_persen * total_poin * 1
+  besar_klaim: number;            // Nominal rupiah yang diklaim jamaah (harus <= jumlah_hak)
+  nama_bank: string;              // Nama bank penerima (BSI, Mandiri, BCA, dll)
+  no_rekening: string;            // Nomor rekening tujuan transfer
+  komentar?: string;              // Keterangan / catatan tambahan dari jamaah
+  lampiran_file_id?: string;      // ID file bukti kuitansi di Google Drive
+  lampiran_url?: string;          // URL akses file bukti di Google Drive
+  bukti_transfer_file_id?: string;// ID file bukti transfer dari admin di Google Drive
+  bukti_transfer_url?: string;    // URL akses bukti transfer di Google Drive
+  status: ReimburstClaimStatus;   // 'submitted' | 'verified' | 'rejected' | 'transferred'
+  catatan_admin?: string;         // Catatan revisi atau alasan penolakan dari admin
+  created_at: string;             // Waktu pengajuan klaim (ISO 8601)
+  updated_at?: string;            // Waktu pembaruan status terakhir (ISO 8601)
+
+  // Field denormalisasi untuk kemudahan tampilan UI jamaah & admin
+  nama_user?: string;
+  nrp?: string;
+  no_hp?: string;
+  nama_program?: string;
+  jenis_reimburst?: string;
+}
+
+/**
+ * Tabel: `master_bank`
+ * Menyimpan daftar referensi bank nasional & syariah untuk pencairan transfer klaim
+ */
+export interface MasterBank {
+  bank_id: string;                // Kode atau ID bank (contoh: 'bsi', 'mandiri', 'bca')
+  nama_bank: string;              // Nama resmi bank (contoh: 'BSI (Bank Syariah Indonesia)')
+  status: 'active' | 'inactive';  // Status keaktifan opsi
 }
 
 /**
@@ -208,6 +270,7 @@ export const USERS_TABLE_HEADERS = [
   'total_poin',
   'role',
   'created_at',
+  'nrp',
 ] as const;
 
 export const MASTER_EVENT_TABLE_HEADERS = [
@@ -255,6 +318,43 @@ export const VIDEOS_TABLE_HEADERS = [
   'description',
   'youtube_url',
   'created_at',
+  'status',
+] as const;
+
+export const MASTER_REIMBURST_PROGRAM_TABLE_HEADERS = [
+  'program_id',
+  'jenis_reimburst',
+  'nama_program',
+  'tanggal_mulai',
+  'tanggal_selesai',
+  'maks_persen_reimburst',
+  'status',
+  'created_at',
+] as const;
+
+export const REIMBURST_CLAIM_TABLE_HEADERS = [
+  'claim_id',
+  'user_id',
+  'program_id',
+  'tanggal_klaim',
+  'jumlah_hak',
+  'besar_klaim',
+  'nama_bank',
+  'no_rekening',
+  'komentar',
+  'lampiran_file_id',
+  'lampiran_url',
+  'bukti_transfer_file_id',
+  'bukti_transfer_url',
+  'status',
+  'catatan_admin',
+  'created_at',
+  'updated_at',
+] as const;
+
+export const MASTER_BANK_TABLE_HEADERS = [
+  'bank_id',
+  'nama_bank',
   'status',
 ] as const;
 
@@ -436,6 +536,76 @@ export const VIDEOS_SCHEMA: TableStructureMeta = {
 };
 
 /**
+ * Metadata Lengkap Tabel 8: `master_reimburst_program`
+ */
+export const MASTER_REIMBURST_PROGRAM_SCHEMA: TableStructureMeta = {
+  tableName: 'master_reimburst_program',
+  sheetName: 'master_reimburst_program',
+  displayName: 'Tabel Master Program Reimburse (master_reimburst_program)',
+  description: 'Menyimpan program klaim reimburse poin multi-jenis (Pendidikan Anak, Kesehatan, Pernikahan, dll).',
+  primaryKey: 'program_id',
+  headers: MASTER_REIMBURST_PROGRAM_TABLE_HEADERS as any,
+  columns: [
+    { field: 'program_id', header: 'program_id', type: 'string', required: true, description: 'ID unik program reimburse (Primary Key)', example: 'prog_1712000001' },
+    { field: 'jenis_reimburst', header: 'jenis_reimburst', type: 'string', required: true, description: 'Kategori jenis reimburse (bebas diinput admin)', example: 'Pendidikan Anak' },
+    { field: 'nama_program', header: 'nama_program', type: 'string', required: true, description: 'Nama lengkap program reimburse', example: 'Reimburse SPP & Buku Sekolah Anak Periode 2026' },
+    { field: 'tanggal_mulai', header: 'tanggal_mulai', type: 'date', required: true, description: 'Tanggal mulai berlaku (YYYY-MM-DD)', example: '2026-01-01' },
+    { field: 'tanggal_selesai', header: 'tanggal_selesai', type: 'date', required: true, description: 'Tanggal berakhir berlaku (YYYY-MM-DD)', example: '2026-12-31' },
+    { field: 'maks_persen_reimburst', header: 'maks_persen_reimburst', type: 'number', required: true, description: 'Maksimum % dari total saldo poin jamaah yang bisa dicairkan', example: '50' },
+    { field: 'status', header: 'status', type: 'enum', required: true, description: 'Status program (active / inactive)', example: 'active', options: ['active', 'inactive'] },
+    { field: 'created_at', header: 'created_at', type: 'datetime', required: true, description: 'Waktu pembuatan program (ISO 8601)', example: '2026-01-01T08:00:00.000Z' },
+  ],
+};
+
+/**
+ * Metadata Lengkap Tabel 9: `reimburst_claim`
+ */
+export const REIMBURST_CLAIM_SCHEMA: TableStructureMeta = {
+  tableName: 'reimburst_claim',
+  sheetName: 'reimburst_claim',
+  displayName: 'Tabel Transaksi Klaim Reimburse (reimburst_claim)',
+  description: 'Menyimpan seluruh pengajuan klaim poin jamaah, kuitansi Drive, verifikasi, dan bukti transfer.',
+  primaryKey: 'claim_id',
+  headers: REIMBURST_CLAIM_TABLE_HEADERS as any,
+  columns: [
+    { field: 'claim_id', header: 'claim_id', type: 'string', required: true, description: 'ID unik transaksi klaim (Primary Key)', example: 'clm_1712000001' },
+    { field: 'user_id', header: 'user_id', type: 'string', required: true, description: 'Relasi ke users (Foreign Key)', example: 'usr_demo_1' },
+    { field: 'program_id', header: 'program_id', type: 'string', required: true, description: 'Relasi ke master_reimburst_program (Foreign Key)', example: 'prog_1712000001' },
+    { field: 'tanggal_klaim', header: 'tanggal_klaim', type: 'date', required: true, description: 'Tanggal submit klaim oleh jamaah (YYYY-MM-DD)', example: '2026-09-28' },
+    { field: 'jumlah_hak', header: 'jumlah_hak', type: 'number', required: true, description: 'Kapasitas hak klaim (Rp) = maks_persen * total_poin', example: '50000' },
+    { field: 'besar_klaim', header: 'besar_klaim', type: 'number', required: true, description: 'Nominal rupiah yang diklaim (harus <= jumlah_hak)', example: '50000' },
+    { field: 'nama_bank', header: 'nama_bank', type: 'string', required: true, description: 'Nama bank tujuan transfer', example: 'BSI (Bank Syariah Indonesia)' },
+    { field: 'no_rekening', header: 'no_rekening', type: 'string', required: true, description: 'Nomor rekening jamaah', example: '7123456789' },
+    { field: 'komentar', header: 'komentar', type: 'text', required: false, description: 'Catatan tambahan jamaah', example: 'Kuitansi pembelian buku semester genap' },
+    { field: 'lampiran_file_id', header: 'lampiran_file_id', type: 'string', required: false, description: 'ID file kuitansi Google Drive', example: '1A2b3C4d5E...' },
+    { field: 'lampiran_url', header: 'lampiran_url', type: 'string', required: false, description: 'Link view file kuitansi Google Drive', example: 'https://drive.google.com/uc?id=...' },
+    { field: 'bukti_transfer_file_id', header: 'bukti_transfer_file_id', type: 'string', required: false, description: 'ID file bukti transfer admin di Google Drive', example: '1X2y3Z...' },
+    { field: 'bukti_transfer_url', header: 'bukti_transfer_url', type: 'string', required: false, description: 'Link view bukti transfer admin di Google Drive', example: 'https://drive.google.com/uc?id=...' },
+    { field: 'status', header: 'status', type: 'enum', required: true, description: 'Status alur klaim', example: 'submitted', options: ['submitted', 'verified', 'rejected', 'transferred'] },
+    { field: 'catatan_admin', header: 'catatan_admin', type: 'text', required: false, description: 'Catatan admin jika ditolak/dikoreksi', example: 'Dokumen kuitansi terpotong, silakan upload ulang.' },
+    { field: 'created_at', header: 'created_at', type: 'datetime', required: true, description: 'Waktu transaksi klaim dibuat (ISO 8601)', example: '2026-09-28T10:00:00.000Z' },
+    { field: 'updated_at', header: 'updated_at', type: 'datetime', required: false, description: 'Waktu perubahan status terakhir', example: '2026-09-28T11:00:00.000Z' },
+  ],
+};
+
+/**
+ * Metadata Lengkap Tabel 10: `master_bank`
+ */
+export const MASTER_BANK_SCHEMA: TableStructureMeta = {
+  tableName: 'master_bank',
+  sheetName: 'master_bank',
+  displayName: 'Tabel Master Bank (master_bank)',
+  description: 'Menyimpan daftar pilihan bank tujuan transfer klaim reimburse.',
+  primaryKey: 'bank_id',
+  headers: MASTER_BANK_TABLE_HEADERS as any,
+  columns: [
+    { field: 'bank_id', header: 'bank_id', type: 'string', required: true, description: 'Kode/ID unik bank', example: 'bsi' },
+    { field: 'nama_bank', header: 'nama_bank', type: 'string', required: true, description: 'Nama Bank Resmi', example: 'BSI (Bank Syariah Indonesia)' },
+    { field: 'status', header: 'status', type: 'enum', required: true, description: 'Status aktif (active / inactive)', example: 'active', options: ['active', 'inactive'] },
+  ],
+};
+
+/**
  * Daftar Seluruh Skema Tabel (Dictionary & Array)
  */
 export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
@@ -446,6 +616,9 @@ export const ALL_DATABASE_SCHEMAS: TableStructureMeta[] = [
   COMPANY_SCHEMA,
   UNIT_SCHEMA,
   VIDEOS_SCHEMA,
+  MASTER_REIMBURST_PROGRAM_SCHEMA,
+  REIMBURST_CLAIM_SCHEMA,
+  MASTER_BANK_SCHEMA,
 ];
 
 export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
@@ -456,4 +629,7 @@ export const DATABASE_SCHEMA_DICTIONARY: Record<string, TableStructureMeta> = {
   company: COMPANY_SCHEMA,
   unit: UNIT_SCHEMA,
   videos: VIDEOS_SCHEMA,
+  master_reimburst_program: MASTER_REIMBURST_PROGRAM_SCHEMA,
+  reimburst_claim: REIMBURST_CLAIM_SCHEMA,
+  master_bank: MASTER_BANK_SCHEMA,
 };

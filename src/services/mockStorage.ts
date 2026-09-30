@@ -1,4 +1,4 @@
-import { MasterEvent, ScanLog, User, EventReview, VideoItem } from '../types';
+import { MasterEvent, ScanLog, User, EventReview, VideoItem, ReimburstProgram, ReimburstClaim, MasterBank } from '../types';
 
 const USERS_KEY = 'alhijrah_users_db';
 const EVENTS_KEY = 'alhijrah_events_db';
@@ -7,6 +7,9 @@ const REVIEWS_KEY = 'alhijrah_reviews_db';
 const VIDEOS_KEY = 'alhijrah_videos_db';
 const COMPANIES_KEY = 'alhijrah_companies_db';
 const UNITS_KEY = 'alhijrah_units_db';
+const REIMBURST_PROGRAMS_KEY = 'alhijrah_reimburst_programs_db';
+const REIMBURST_CLAIMS_KEY = 'alhijrah_reimburst_claims_db';
+const BANKS_KEY = 'alhijrah_banks_db';
 const GAS_URL_KEY = 'alhijrah_gas_webapp_url';
 
 /**
@@ -470,10 +473,143 @@ export function saveLocalVideos(videos: VideoItem[]): void {
   }
 }
 
+export const DEFAULT_BANKS: MasterBank[] = [
+  { bank_id: 'bsi', nama_bank: 'BSI (Bank Syariah Indonesia)', status: 'active' },
+  { bank_id: 'mandiri', nama_bank: 'Bank Mandiri', status: 'active' },
+  { bank_id: 'bca', nama_bank: 'Bank BCA', status: 'active' },
+  { bank_id: 'bri', nama_bank: 'Bank BRI', status: 'active' },
+  { bank_id: 'bni', nama_bank: 'Bank BNI', status: 'active' },
+  { bank_id: 'cimb', nama_bank: 'Bank CIMB Niaga', status: 'active' },
+  { bank_id: 'permata', nama_bank: 'Bank Permata', status: 'active' },
+  { bank_id: 'btn', nama_bank: 'Bank BTN', status: 'active' },
+];
+
+export const DEFAULT_REIMBURST_PROGRAMS: ReimburstProgram[] = [
+  {
+    program_id: 'prog_pendidikan_01',
+    jenis_reimburst: 'Pendidikan Anak',
+    nama_program: 'Reimburst SPP & Buku Sekolah Anak - Periode 2026',
+    tanggal_mulai: '2026-01-01',
+    tanggal_selesai: '2026-12-31',
+    maks_persen_reimburst: 50,
+    status: 'active',
+    created_at: new Date(Date.now() - 86400000 * 15).toISOString(),
+  },
+  {
+    program_id: 'prog_kesehatan_02',
+    jenis_reimburst: 'Kesehatan',
+    nama_program: 'Bantuan Pengobatan & Rawat Jalan Keluarga - Periode 2026',
+    tanggal_mulai: '2026-01-01',
+    tanggal_selesai: '2026-12-31',
+    maks_persen_reimburst: 60,
+    status: 'active',
+    created_at: new Date(Date.now() - 86400000 * 10).toISOString(),
+  },
+  {
+    program_id: 'prog_nikah_03',
+    jenis_reimburst: 'Pernikahan',
+    nama_program: 'Kado & Bingkisan Pernikahan Jamaah Al Hijrah - Periode 2026',
+    tanggal_mulai: '2026-01-01',
+    tanggal_selesai: '2026-12-31',
+    maks_persen_reimburst: 40,
+    status: 'active',
+    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+  },
+];
+
+export const DEFAULT_REIMBURST_CLAIMS: ReimburstClaim[] = [
+  {
+    claim_id: 'clm_demo_01',
+    user_id: 'usr_demo_1',
+    program_id: 'prog_pendidikan_01',
+    tanggal_klaim: new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0],
+    jumlah_hak: 25,
+    besar_klaim: 25,
+    nama_bank: 'BSI (Bank Syariah Indonesia)',
+    no_rekening: '7123456789',
+    komentar: 'Pengajuan klaim buku paket matematika anak semester genap',
+    lampiran_url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=800&q=80',
+    lampiran_file_id: 'sample_lampiran_01',
+    status: 'submitted',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    nama_user: 'Ahmad Fauzi',
+    no_hp: '6281234567890',
+    nrp: '1234567890',
+    nama_program: 'Reimburst SPP & Buku Sekolah Anak - Periode 2026',
+    jenis_reimburst: 'Pendidikan Anak',
+  },
+];
+
+export function getLocalBanks(): MasterBank[] {
+  try {
+    const raw = localStorage.getItem(BANKS_KEY);
+    if (!raw) {
+      localStorage.setItem(BANKS_KEY, JSON.stringify(DEFAULT_BANKS));
+      return DEFAULT_BANKS;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_BANKS;
+  }
+}
+
+export function saveLocalBanks(banks: MasterBank[]): void {
+  try {
+    localStorage.setItem(BANKS_KEY, JSON.stringify(banks));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function getLocalPrograms(): ReimburstProgram[] {
+  try {
+    const raw = localStorage.getItem(REIMBURST_PROGRAMS_KEY);
+    if (!raw) {
+      localStorage.setItem(REIMBURST_PROGRAMS_KEY, JSON.stringify(DEFAULT_REIMBURST_PROGRAMS));
+      return DEFAULT_REIMBURST_PROGRAMS;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_REIMBURST_PROGRAMS;
+  }
+}
+
+export function saveLocalPrograms(programs: ReimburstProgram[]): void {
+  try {
+    localStorage.setItem(REIMBURST_PROGRAMS_KEY, JSON.stringify(programs));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function getLocalClaims(): ReimburstClaim[] {
+  try {
+    const raw = localStorage.getItem(REIMBURST_CLAIMS_KEY);
+    if (!raw) {
+      localStorage.setItem(REIMBURST_CLAIMS_KEY, JSON.stringify(DEFAULT_REIMBURST_CLAIMS));
+      return DEFAULT_REIMBURST_CLAIMS;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_REIMBURST_CLAIMS;
+  }
+}
+
+export function saveLocalClaims(claims: ReimburstClaim[]): void {
+  try {
+    localStorage.setItem(REIMBURST_CLAIMS_KEY, JSON.stringify(claims));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 export function resetToDefaultData(): void {
   localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS));
   localStorage.setItem(EVENTS_KEY, JSON.stringify(DEFAULT_EVENTS));
   localStorage.setItem(LOGS_KEY, JSON.stringify(DEFAULT_LOGS));
   localStorage.setItem(REVIEWS_KEY, JSON.stringify(DEFAULT_REVIEWS));
   localStorage.setItem(VIDEOS_KEY, JSON.stringify(DEFAULT_VIDEOS));
+  localStorage.setItem(REIMBURST_PROGRAMS_KEY, JSON.stringify(DEFAULT_REIMBURST_PROGRAMS));
+  localStorage.setItem(REIMBURST_CLAIMS_KEY, JSON.stringify(DEFAULT_REIMBURST_CLAIMS));
+  localStorage.setItem(BANKS_KEY, JSON.stringify(DEFAULT_BANKS));
 }

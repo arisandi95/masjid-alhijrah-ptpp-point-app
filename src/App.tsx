@@ -12,6 +12,7 @@ import { ScanPage } from './pages/ScanPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { AdminEventPage } from './pages/AdminEventPage';
 import { VideosPage } from './pages/VideosPage';
+import { ReimburstPage } from './pages/ReimburstPage';
 import { BottomNav, TabType } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
@@ -64,8 +65,13 @@ function AppContent() {
             onGoToScan={() => setActiveTab('scan')}
             onGoToHistory={() => setActiveTab('history')}
             onGoToVideos={() => setActiveTab('videos')}
+            onGoToReimburst={() => setActiveTab('reimburst')}
             onGoToAdmin={isAdmin ? () => setActiveTab('admin') : undefined}
           />
+        )}
+
+        {safeActiveTab === 'reimburst' && (
+          <ReimburstPage onBack={() => setActiveTab('home')} />
         )}
 
         {safeActiveTab === 'videos' && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Phone, Mail, Calendar, Briefcase, ChevronDown, Eye, EyeOff, AlertCircle, ArrowRight, Building2, Layers } from 'lucide-react';
+import { User, Phone, Mail, Calendar, Briefcase, ChevronDown, Eye, EyeOff, AlertCircle, ArrowRight, Building2, Layers, IdCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { JenisKelamin, StatusJamaah, Company, Unit, StatusPegawai } from '../types';
 import { api } from '../services/api';
@@ -12,6 +12,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
   const { register } = useAuth();
   const [nama, setNama] = useState('');
   const [noHp, setNoHp] = useState('');
+  const [nrp, setNrp] = useState('');
   const [email, setEmail] = useState('');
   const [tanggalLahir, setTanggalLahir] = useState('');
   const [jenisKelamin, setJenisKelamin] = useState<JenisKelamin>('pria');
@@ -134,6 +135,14 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
       setErrorMsg('Nama lengkap jamaah wajib diisi');
       return;
     }
+    if (!nrp.trim()) {
+      setErrorMsg('Nomor Registrasi Pegawai (NRP) wajib diisi');
+      return;
+    }
+    if (nrp.trim().length > 16) {
+      setErrorMsg('Nomor Registrasi Pegawai (NRP) maksimal 16 karakter');
+      return;
+    }
     if (!noHp.trim()) {
       setErrorMsg('Nomor handphone wajib diisi');
       return;
@@ -171,6 +180,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
 
     try {
       const res = await register(nama, noHp, pin, 'user', {
+        nrp: nrp.trim(),
         email: email.trim() || undefined,
         tanggal_lahir: tanggalLahir || undefined,
         jenis_kelamin: jenisKelamin,
@@ -236,6 +246,35 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onGoToLogin }) => {
                 required
               />
             </div>
+          </div>
+
+          {/* NRP (Wajib, Maks 16 Karakter) */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[#1F2A24]">
+                NRP (Nomor Registrasi Pegawai) <span className="text-red-500">*</span>
+              </label>
+              <span className={`text-[10px] ${nrp.length > 16 ? 'text-red-500 font-bold' : 'text-[#6B7568]'}`}>
+                {nrp.length}/16
+              </span>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                <IdCard className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                maxLength={16}
+                value={nrp}
+                onChange={(e) => setNrp(e.target.value.replace(/\s+/g, ''))}
+                placeholder="Maks. 16 karakter (Contoh: 1234567890)"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7]"
+                required
+              />
+            </div>
+            <p className="text-[10px] text-[#6B7568] mt-1">
+              Nomor identitas karyawan untuk keperluan absensi & klaim reimburst.
+            </p>
           </div>
 
           {/* Nomor WhatsApp */}

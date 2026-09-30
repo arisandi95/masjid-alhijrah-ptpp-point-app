@@ -13,11 +13,14 @@ import {
   Gift,
   Video as VideoIcon,
   Play,
+  Wallet,
+  IdCard,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PointBadge } from '../components/PointBadge';
 import { EventHistoryItem } from '../components/EventHistoryItem';
 import { PWAInstallBanner } from '../components/PWAInstallBanner';
+import { CompleteNrpModal } from '../components/CompleteNrpModal';
 import { api } from '../services/api';
 import { MasterEvent, ScanLog } from '../types';
 import { getCompanyDisplayName, getUnitDisplayName } from '../utils/companyUtils';
@@ -26,6 +29,7 @@ interface HomePageProps {
   onGoToScan: () => void;
   onGoToHistory: () => void;
   onGoToVideos?: () => void;
+  onGoToReimburst?: () => void;
   onGoToAdmin?: () => void;
 }
 
@@ -33,12 +37,14 @@ export const HomePage: React.FC<HomePageProps> = ({
   onGoToScan,
   onGoToHistory,
   onGoToVideos,
+  onGoToReimburst,
   onGoToAdmin,
 }) => {
   const { user, logout } = useAuth();
   const [activeEvents, setActiveEvents] = useState<MasterEvent[]>([]);
   const [recentLogs, setRecentLogs] = useState<ScanLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNrpModal, setShowNrpModal] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,6 +109,21 @@ export const HomePage: React.FC<HomePageProps> = ({
               {user?.nama || 'Jamaah Al Hijrah'}
             </h1>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {user?.nrp ? (
+                <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/60 font-mono flex items-center gap-0.5">
+                  <IdCard className="w-2.5 h-2.5 text-emerald-700" />
+                  NRP: {user.nrp}
+                </span>
+              ) : (
+                <button
+                  onClick={() => setShowNrpModal(true)}
+                  className="text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 flex items-center gap-1 cursor-pointer animate-pulse transition"
+                  title="Klik untuk mengisi nomor NRP"
+                >
+                  <IdCard className="w-2.5 h-2.5" />
+                  + Isi NRP
+                </button>
+              )}
               {user?.status_pegawai && (
                 <span className="text-[10px] font-medium text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200/60">
                   {user.status_pegawai}
@@ -191,6 +212,49 @@ export const HomePage: React.FC<HomePageProps> = ({
         </button>
       </div>
 
+      {/* Reimburse Quick Action Card (1 Poin = Rp 1) */}
+      <div className="bg-gradient-to-br from-white via-amber-50/30 to-amber-100/20 rounded-3xl p-4 sm:p-4.5 border border-amber-200/70 shadow-2xs relative overflow-hidden">
+        <div className="flex items-start justify-between gap-3 mb-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-800 flex items-center justify-center shrink-0">
+              <Wallet className="w-5 h-5 stroke-[2.2]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-xs sm:text-sm font-bold text-[#1F2A24] font-heading">
+                  Klaim Reimburse Jamaah
+                </h3>
+                <span className="text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded">
+                  Baru
+                </span>
+              </div>
+              <p className="text-[11px] text-[#6B7568] mt-0.5">
+                Nilai konversi: <strong>1 Poin = Rp 1</strong>
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] text-[#6B7568] block">Hak Saldo</span>
+            <span className="text-xs sm:text-sm font-extrabold text-[#0F6B4C] font-mono">
+              Rp {(user?.total_poin || 0).toLocaleString('id-ID')}
+            </span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-[#6B7568] leading-relaxed mb-3">
+          Tukarkan akumulasi poin kehadiran kajian Anda untuk pengajuan klaim dana program takmir (buku, pendidikan, kesehatan, dll).
+        </p>
+
+        <button
+          onClick={onGoToReimburst}
+          className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+        >
+          <Wallet className="w-4 h-4" />
+          <span>Ajukan / Pantau Klaim Reimburse</span>
+          <ChevronRight className="w-3.5 h-3.5 ml-auto" />
+        </button>
+      </div>
+
       {/* Active Kajian Card */}
       {featuredEvent && (() => {
         const isRedeem = featuredEvent.event_type === 'redeem';
@@ -263,9 +327,6 @@ export const HomePage: React.FC<HomePageProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider">
-                  Fitur Baru
-                </span>
                 <span className="px-1.5 py-0.2 bg-red-600/90 text-[9px] font-bold rounded text-white">
                   YouTube
                 </span>
@@ -328,6 +389,12 @@ export const HomePage: React.FC<HomePageProps> = ({
           </span>
         </p>
       </div>
+
+      {/* Modal Lengkapi NRP untuk jamaah */}
+      <CompleteNrpModal
+        isOpen={showNrpModal}
+        onClose={() => setShowNrpModal(false)}
+      />
     </div>
   );
 };

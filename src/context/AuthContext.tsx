@@ -13,12 +13,17 @@ interface AuthContextType {
     pin: string,
     role?: 'user' | 'admin',
     details?: {
+      nrp?: string;
       email?: string;
       tanggal_lahir?: string;
       jenis_kelamin?: JenisKelamin;
       status_jamaah?: StatusJamaah;
+      status_pegawai?: string;
+      company_id?: string;
+      unit_id?: string;
     }
   ) => Promise<{ success: boolean; error?: string }>;
+  updateUserNrp: (nrp: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
   updateUserPoints: (newTotalPoin: number) => void;
@@ -84,10 +89,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     pin: string,
     role: 'user' | 'admin' = 'user',
     details?: {
+      nrp?: string;
       email?: string;
       tanggal_lahir?: string;
       jenis_kelamin?: JenisKelamin;
       status_jamaah?: StatusJamaah;
+      status_pegawai?: string;
+      company_id?: string;
+      unit_id?: string;
     }
   ) => {
     try {
@@ -98,6 +107,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
       return { success: false, error: res.error || 'Pendaftaran gagal.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Terjadi gangguan koneksi.' };
+    }
+  };
+
+  const updateUserNrp = async (nrp: string) => {
+    if (!user) return { success: false, error: 'User belum login' };
+    try {
+      const res = await api.updateNrp(user.user_id, nrp);
+      if (res.success) {
+        const updated = { ...user, nrp: nrp.trim() };
+        setUser(updated);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Gagal memperbarui NRP' };
     } catch (err: any) {
       return { success: false, error: err.message || 'Terjadi gangguan koneksi.' };
     }
@@ -138,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        updateUserNrp,
         logout,
         refreshProfile,
         updateUserPoints,
