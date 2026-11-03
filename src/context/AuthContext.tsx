@@ -24,6 +24,7 @@ interface AuthContextType {
     }
   ) => Promise<{ success: boolean; error?: string }>;
   updateUserNrp: (nrp: string) => Promise<{ success: boolean; error?: string }>;
+  updateUserPin: (oldPin: string, newPin: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   refreshProfile: () => Promise<void>;
   updateUserPoints: (newTotalPoin: number) => void;
@@ -128,6 +129,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserPin = async (oldPin: string, newPin: string) => {
+    if (!user) return { success: false, error: 'User belum login' };
+    try {
+      const res = await api.updatePin(user.user_id, oldPin, newPin);
+      if (res.success) {
+        const updated = { ...user, pin: newPin.trim() };
+        setUser(updated);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+        return { success: true };
+      }
+      return { success: false, error: res.error || 'Gagal memperbarui PIN' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Terjadi gangguan koneksi.' };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -164,6 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         updateUserNrp,
+        updateUserPin,
         logout,
         refreshProfile,
         updateUserPoints,

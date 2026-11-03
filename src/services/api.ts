@@ -393,6 +393,62 @@ export const api = {
     return { success: false, error: 'User tidak ditemukan' };
   },
 
+  // 1.6 UPDATE PIN (Ubah PIN Keamanan Jamaah)
+  async updatePin(userId: string, oldPin: string, newPin: string): Promise<ApiResponse<void>> {
+    const cleanOld = oldPin.trim();
+    const cleanNew = newPin.trim();
+
+    if (!cleanOld) return { success: false, error: 'PIN lama wajib diisi' };
+    if (!cleanNew) return { success: false, error: 'PIN baru wajib diisi' };
+    if (cleanNew.length < 4 || cleanNew.length > 6) {
+      return { success: false, error: 'PIN baru harus 4 sampai 6 digit' };
+    }
+    if (!/^\d+$/.test(cleanNew)) {
+      return { success: false, error: 'PIN baru harus berupa angka saja' };
+    }
+    if (cleanOld === cleanNew) {
+      return { success: false, error: 'PIN baru tidak boleh sama dengan PIN lama' };
+    }
+
+    if (getGasUrl()) {
+      try {
+        const res = await callGasApi<void>('updatePin', {
+          user_id: userId,
+          old_pin: cleanOld,
+          new_pin: cleanNew,
+        }, true);
+        if (res.success) {
+          const users = getLocalUsers();
+          const target = users.find((u) => u.user_id === userId);
+          if (target) {
+            target.pin = cleanNew;
+            saveLocalUsers(users);
+          }
+          return res;
+        } else {
+          return res;
+        }
+      } catch (e: any) {
+        if (e.message !== 'NO_GAS_URL') {
+          return { success: false, error: e.message || 'Gagal mengubah PIN di server Google Sheets.' };
+        }
+      }
+    }
+
+    // Local / Offline fallback
+    const users = getLocalUsers();
+    const target = users.find((u) => u.user_id === userId);
+    if (!target) {
+      return { success: false, error: 'User tidak ditemukan' };
+    }
+    if (target.pin && target.pin !== cleanOld) {
+      return { success: false, error: 'PIN lama yang Anda masukkan salah' };
+    }
+    target.pin = cleanNew;
+    saveLocalUsers(users);
+    return { success: true, message: 'PIN keamanan berhasil diperbarui!' };
+  },
+
   // 2. LOGIN
   async login(no_hp: string, pin: string): Promise<ApiResponse<User>> {
     const formattedPhone = formatPhoneNumber(no_hp);

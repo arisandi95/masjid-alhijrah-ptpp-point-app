@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, QrCode, History, ShieldCheck, Video as VideoIcon, Wallet } from 'lucide-react';
+import { Home, QrCode, History, ShieldCheck, Wallet, Video as VideoIcon } from 'lucide-react';
 
-export type TabType = 'home' | 'reimburst' | 'scan' | 'videos' | 'history' | 'admin';
+export type TabType = 'home' | 'reimburst' | 'scan' | 'videos' | 'history' | 'admin' | 'profile';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -26,7 +26,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onChangeTab, is
           </span>
         </button>
 
-        {/* Tab 2: Reimburse (Fitur Baru: 1 Poin = Rp 1) */}
+        {/* Tab 2: Reimburse (1 Poin = Rp 1) */}
         <button
           onClick={() => onChangeTab('reimburst')}
           className={`flex flex-col items-center justify-center py-1 px-1.5 transition-colors cursor-pointer ${
@@ -70,7 +70,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onChangeTab, is
           </button>
         </div>
 
-        {/* Tab 4: Videos */}
+        {/* Tab 4: Video Kajian */}
         <button
           onClick={() => onChangeTab('videos')}
           className={`flex flex-col items-center justify-center py-1 px-1.5 transition-colors cursor-pointer ${
@@ -79,25 +79,24 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onChangeTab, is
         >
           <VideoIcon className={`w-5 h-5 ${activeTab === 'videos' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
           <span className={`text-[10px] mt-0.5 ${activeTab === 'videos' ? 'font-bold' : 'font-medium'}`}>
-            Videos
+            Video
           </span>
         </button>
 
-        {/* Tab 5: History */}
-        <button
-          onClick={() => onChangeTab('history')}
-          className={`flex flex-col items-center justify-center py-1 px-1.5 transition-colors cursor-pointer ${
-            activeTab === 'history' ? 'text-[#0F6B4C]' : 'text-[#6B7568] hover:text-[#1F2A24]'
-          }`}
-        >
-          <History className={`w-5 h-5 ${activeTab === 'history' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-          <span className={`text-[10px] mt-0.5 ${activeTab === 'history' ? 'font-bold' : 'font-medium'}`}>
-            Riwayat
-          </span>
-        </button>
-
-        {/* Tab 6: Admin (Khusus Role: Admin) */}
-        {isAdmin && (
+        {/* Tab 5: Riwayat (User) atau Admin (Pengurus) */}
+        {!isAdmin ? (
+          <button
+            onClick={() => onChangeTab('history')}
+            className={`flex flex-col items-center justify-center py-1 px-1.5 transition-colors cursor-pointer ${
+              activeTab === 'history' ? 'text-[#0F6B4C]' : 'text-[#6B7568] hover:text-[#1F2A24]'
+            }`}
+          >
+            <History className={`w-5 h-5 ${activeTab === 'history' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+            <span className={`text-[10px] mt-0.5 ${activeTab === 'history' ? 'font-bold' : 'font-medium'}`}>
+              Riwayat
+            </span>
+          </button>
+        ) : (
           <button
             onClick={() => onChangeTab('admin')}
             className={`flex flex-col items-center justify-center py-1 px-1.5 transition-colors cursor-pointer ${

@@ -30,6 +30,7 @@ interface HomePageProps {
   onGoToHistory: () => void;
   onGoToVideos?: () => void;
   onGoToReimburst?: () => void;
+  onGoToProfile?: () => void;
   onGoToAdmin?: () => void;
 }
 
@@ -38,6 +39,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onGoToHistory,
   onGoToVideos,
   onGoToReimburst,
+  onGoToProfile,
   onGoToAdmin,
 }) => {
   const { user, logout } = useAuth();
@@ -84,8 +86,12 @@ export const HomePage: React.FC<HomePageProps> = ({
 
       {/* Top Bar Header */}
       <header className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-[#0F6B4C] text-[#FAF3D1] flex items-center justify-center shadow-xs">
+        <div
+          onClick={onGoToProfile}
+          className={`flex items-center gap-2.5 ${onGoToProfile ? 'cursor-pointer group' : ''}`}
+          title={onGoToProfile ? 'Buka Profil & Pengaturan Akun' : undefined}
+        >
+          <div className="w-10 h-10 rounded-2xl bg-[#0F6B4C] group-hover:bg-[#0c593f] text-[#FAF3D1] flex items-center justify-center shadow-xs transition">
             <svg width="22" height="22" viewBox="0 0 100 100" fill="currentColor">
               <path d="M50 8 C70 8 88 35 90 62 L90 88 L10 88 L10 62 C12 35 30 8 50 8 Z" />
             </svg>
@@ -105,7 +111,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 {user?.role === 'admin' ? 'Admin' : 'Jamaah'}
               </span>
             </div>
-            <h1 className="text-base font-bold text-[#1F2A24] font-heading leading-tight truncate max-w-[200px]">
+            <h1 className="text-base font-bold text-[#1F2A24] group-hover:text-[#0F6B4C] font-heading leading-tight truncate max-w-[200px] transition">
               {user?.nama || 'Jamaah Al Hijrah'}
             </h1>
             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
@@ -116,7 +122,10 @@ export const HomePage: React.FC<HomePageProps> = ({
                 </span>
               ) : (
                 <button
-                  onClick={() => setShowNrpModal(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowNrpModal(true);
+                  }}
                   className="text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 flex items-center gap-1 cursor-pointer animate-pulse transition"
                   title="Klik untuk mengisi nomor NRP"
                 >
@@ -154,9 +163,18 @@ export const HomePage: React.FC<HomePageProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {onGoToProfile && (
+            <button
+              onClick={onGoToProfile}
+              className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-[#0F6B4C] hover:bg-[#E8F3EE] flex items-center justify-center transition shadow-2xs cursor-pointer"
+              title="Profil & Pengaturan Akun"
+            >
+              <UserIcon className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={logout}
-            className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-[#6B7568] hover:text-[#C0392B] flex items-center justify-center transition shadow-2xs"
+            className="w-9 h-9 rounded-xl border border-gray-200 bg-white text-[#6B7568] hover:text-[#C0392B] flex items-center justify-center transition shadow-2xs cursor-pointer"
             title="Keluar Akun"
           >
             <LogOut className="w-4 h-4" />

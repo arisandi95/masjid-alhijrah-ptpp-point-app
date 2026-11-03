@@ -13,6 +13,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { AdminEventPage } from './pages/AdminEventPage';
 import { VideosPage } from './pages/VideosPage';
 import { ReimburstPage } from './pages/ReimburstPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { BottomNav, TabType } from './components/BottomNav';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
@@ -43,7 +44,7 @@ function AppContent() {
   // Not logged in -> show Login or Register
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#FAFAF7]">
+      <div className="min-h-screen bg-[#042519]">
         <OfflineIndicator />
         {authView === 'login' ? (
           <LoginPage onGoToRegister={() => setAuthView('register')} />
@@ -66,6 +67,7 @@ function AppContent() {
             onGoToHistory={() => setActiveTab('history')}
             onGoToVideos={() => setActiveTab('videos')}
             onGoToReimburst={() => setActiveTab('reimburst')}
+            onGoToProfile={() => setActiveTab('profile')}
             onGoToAdmin={isAdmin ? () => setActiveTab('admin') : undefined}
           />
         )}
@@ -91,6 +93,13 @@ function AppContent() {
         )}
 
         {safeActiveTab === 'history' && <HistoryPage />}
+
+        {safeActiveTab === 'profile' && (
+          <ProfilePage
+            onBack={() => setActiveTab('home')}
+            onGoToReimburse={() => setActiveTab('reimburst')}
+          />
+        )}
 
         {safeActiveTab === 'admin' && isAdmin && <AdminEventPage />}
       </main>

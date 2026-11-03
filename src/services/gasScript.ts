@@ -350,13 +350,13 @@ function saveBase64ToDrive(base64Data, fileName, folderName) {
       cleanBase64 = parts[1];
     }
     // Hapus whitespace atau newline yang mungkin menyusup
-    cleanBase64 = cleanBase64.replace(/\s+/g, "");
+    cleanBase64 = cleanBase64.split(" ").join("").split("\\n").join("").split("\\r").join("").split("\\t").join("");
 
     var decoded = Utilities.base64Decode(cleanBase64);
     var blob = Utilities.newBlob(decoded, contentType, fileName || ("reimburst_" + Date.now() + ".jpg"));
 
     // Cari atau buat folder penyimpanan di Google Drive (hindari karakter slash /)
-    var targetFolderName = (folderName || "Reimburse Al Hijrah").replace(/[\/\\]/g, " - ");
+    var targetFolderName = (folderName || "Reimburse Al Hijrah").split("/").join(" - ");
     var folders = DriveApp.getFoldersByName(targetFolderName);
     var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(targetFolderName);
 
@@ -690,6 +690,45 @@ function handleRouting(action, params) {
       }
     }
     return jsonResponse({ success: false, error: "User tidak ditemukan" });
+  }
+
+  // 2.2 UPDATE PIN (Ubah PIN Keamanan Jamaah)
+  if (action === "updatePin") {
+    const user_id = (params.user_id || "").toString().trim();
+    const old_pin = (params.old_pin || "").toString().trim();
+    const new_pin = (params.new_pin || "").toString().trim();
+
+    if (!user_id || !old_pin || !new_pin) {
+      return jsonResponse({ success: false, error: "User ID, PIN lama, dan PIN baru wajib diisi" });
+    }
+    if (new_pin.length < 4 || new_pin.length > 6) {
+      return jsonResponse({ success: false, error: "PIN baru harus 4 sampai 6 digit" });
+    }
+    if (!/^[0-9]+$/.test(new_pin)) {
+      return jsonResponse({ success: false, error: "PIN baru harus berupa angka saja" });
+    }
+    if (old_pin === new_pin) {
+      return jsonResponse({ success: false, error: "PIN baru tidak boleh sama dengan PIN lama" });
+    }
+
+    const sheetUsers = ss.getSheetByName("users");
+    const userHeaderMap = getHeaderMap(sheetUsers);
+    const idCol = userHeaderMap["user_id"] !== undefined ? userHeaderMap["user_id"] : 0;
+    const pinCol = userHeaderMap["pin"] !== undefined ? userHeaderMap["pin"] : 3;
+    const data = sheetUsers.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if ((data[i][idCol] || "").toString().trim() === user_id) {
+        const storedPin = (data[i][pinCol] || "").toString().trim();
+        if (storedPin !== old_pin && storedPin !== hashPin(old_pin)) {
+          return jsonResponse({ success: false, error: "PIN lama yang Anda masukkan salah" });
+        }
+        sheetUsers.getRange(i + 1, pinCol + 1).setValue(new_pin);
+        SpreadsheetApp.flush();
+        return jsonResponse({ success: true, message: "PIN keamanan berhasil diperbarui" });
+      }
+    }
+    return jsonResponse({ success: false, error: "Data jamaah tidak ditemukan" });
   }
   
   // 2.5. VALIDATE QR (Pre-check sebelum isi form penilaian)

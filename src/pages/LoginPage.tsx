@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Lock, Phone, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { IslamicMandala } from '../components/IslamicMandala';
 
 interface LoginPageProps {
   onGoToRegister: () => void;
@@ -38,114 +39,138 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onGoToRegister }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] flex flex-col justify-center py-8 px-5 max-w-md mx-auto">
-      {/* Header Branding */}
-      <div className="pb-5 text-center">
-        <h1 className="text-xl font-extrabold text-[#1F2A24] font-heading tracking-tight">
-          Masjid Al Hijrah PTPP
-        </h1>
-        <p className="text-xs text-[#6B7568] mt-1">
-          Absensi Jamaah & Poin Kajian via QR Code
-        </p>
-      </div>
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#042519] via-[#073C2A] to-[#021810] flex flex-col justify-center items-center py-8 px-4 sm:px-6 relative overflow-hidden select-none">
+      {/* Background Decorative Islamic Mandalas */}
+      <IslamicMandala
+        className="absolute -top-16 -right-16 sm:-top-20 sm:-right-20 pointer-events-none"
+        size={360}
+        opacity={0.22}
+        color="#D4AF37"
+      />
+      <IslamicMandala
+        className="absolute -bottom-24 -left-20 sm:-bottom-28 sm:-left-24 pointer-events-none"
+        size={400}
+        opacity={0.18}
+        color="#D4AF37"
+      />
 
-      {/* Main Form Card */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
-        <h2 className="text-lg font-bold text-[#1F2A24] font-heading mb-1">
-          Masuk Akun Jamaah
-        </h2>
-        <p className="text-xs text-[#6B7568] mb-5">
-          Gunakan nomor HP yang sudah terdaftar untuk mencatat kehadiran.
-        </p>
+      {/* Ambient Warm Golden Glow behind glass card */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[400px] h-[360px] bg-gradient-to-b from-amber-400/15 via-yellow-200/10 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-100 text-[#C0392B] flex items-start gap-2 text-xs">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+      {/* Main Content Container */}
+      <div className="w-full max-w-sm relative z-10">
+        {/* Top Header Branding */}
+        <div className="text-center mb-6">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-white font-heading tracking-tight drop-shadow-sm">
+            Masjid Al Hijrah PTPP
+          </h1>
+          <p className="text-xs sm:text-sm text-white/80 mt-1 tracking-wide">
+            Absensi Jamaah & Poin Kajian via QR Code
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-[#1F2A24] mb-1.5">
-              Nomor Handphone (WhatsApp)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
-                <Phone className="w-4 h-4" />
-              </div>
-              <input
-                type="tel"
-                value={noHp}
-                onChange={(e) => setNoHp(e.target.value)}
-                placeholder="Contoh: 081234567890"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7]"
-                required
-              />
+        {/* Glassmorphic Form Card */}
+        <div className="w-full rounded-[28px] border border-white/25 shadow-2xl backdrop-blur-xl overflow-hidden bg-gradient-to-b from-white/15 via-white/20 to-[#EAE4D8]/85 p-6 sm:p-7 relative transition-all duration-300">
+          <h2 className="text-lg sm:text-xl font-bold text-white font-heading tracking-tight drop-shadow-xs">
+            Masuk Akun Jamaah
+          </h2>
+          <p className="text-xs text-white/85 leading-relaxed mt-1 mb-5">
+            Gunakan nomor HP yang sudah terdaftar untuk mencatat kehadiran.
+          </p>
+
+          {errorMsg && (
+            <div className="mb-4 p-3 rounded-2xl bg-red-500/15 border border-red-400/30 text-white flex items-start gap-2 text-xs backdrop-blur-md">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-300" />
+              <span className="leading-snug">{errorMsg}</span>
             </div>
-            <span className="text-[10px] text-[#6B7568] mt-1 block">
-              Format otomatis disesuaikan (628...)
-            </span>
-          </div>
+          )}
 
-          <div>
-            <label className="block text-xs font-semibold text-[#1F2A24] mb-1.5">
-              PIN Keamanan (4-6 Digit)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
-                <Lock className="w-4 h-4" />
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Input 1: Nomor HP */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1F2A24] mb-1.5">
+                Nomor Handphone (WhatsApp)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <Phone className="w-4 h-4 stroke-[2]" />
+                </div>
+                <input
+                  type="tel"
+                  value={noHp}
+                  onChange={(e) => setNoHp(e.target.value)}
+                  placeholder="Contoh: 081234567890"
+                  className="w-full pl-10 pr-3.5 py-3 rounded-2xl bg-white border border-white/80 text-sm text-[#1F2A24] placeholder:text-[#9AA298] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition"
+                  required
+                />
               </div>
-              <input
-                type={showPin ? 'text' : 'password'}
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="••••••"
-                className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition bg-[#FAFAF7]"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPin(!showPin)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#6B7568] hover:text-[#1F2A24]"
-              >
-                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
+              <span className="text-[10px] text-[#EBEDEF] mt-1.5 block font-medium">
+                Format otomatis disesuaikan (628...)
+              </span>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-[#0F6B4C] text-white font-semibold text-sm shadow-sm hover:bg-[#094A34] transition active:scale-98 flex items-center justify-center gap-2 mt-2 cursor-pointer"
-          >
-            {loading ? (
-              <span>Memproses...</span>
-            ) : (
-              <>
-                <span>Masuk Sekarang</span>
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
-          </button>
-        </form>
-      </div>
+            {/* Input 2: PIN Keamanan */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1F2A24] mb-1.5">
+                PIN Keamanan (4-6 Digit)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#6B7568]">
+                  <Lock className="w-4 h-4 stroke-[2]" />
+                </div>
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="••••••"
+                  className="w-full pl-10 pr-10 py-3 rounded-2xl bg-white border border-white/80 text-sm text-[#1F2A24] tracking-widest placeholder:text-[#9AA298] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#0F6B4C] focus:border-transparent transition"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#6B7568] hover:text-[#1F2A24] cursor-pointer transition"
+                  title={showPin ? 'Sembunyikan PIN' : 'Tampilkan PIN'}
+                >
+                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
 
-      {/* Register Link directly under login card */}
-      <div className="mt-4 text-center">
-        <p className="text-xs text-[#6B7568]">
-          Belum punya akun jamaah?{' '}
-          <button
-            type="button"
-            onClick={onGoToRegister}
-            className="font-bold text-[#0F6B4C] hover:underline cursor-pointer"
-          >
-            Daftar Baru di Sini
-          </button>
-        </p>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#0A5338] via-[#07412C] to-[#042E1F] hover:from-[#0D6243] hover:to-[#063B28] text-white font-bold text-sm shadow-lg shadow-[#021810]/40 transition active:scale-[0.98] flex items-center justify-center gap-2 mt-5 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <span>Memproses...</span>
+              ) : (
+                <>
+                  <span>Masuk Sekarang</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.2]" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        {/* Footer Link: Daftar Baru di Sini */}
+        <div className="mt-5 text-center">
+          <p className="text-xs sm:text-sm text-white/80">
+            Belum punya akun jamaah?{' '}
+            <button
+              type="button"
+              onClick={onGoToRegister}
+              className="font-bold text-[#D4AF37] hover:text-[#E8C55C] hover:underline transition cursor-pointer"
+            >
+              Daftar Baru di Sini
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
